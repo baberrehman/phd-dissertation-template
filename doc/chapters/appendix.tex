@@ -1,0 +1,240 @@
+\chapter{Alternative Disjointness}
+\label{appendix1}
+
+
+We discuss another variant of the disjointness algorithm
+that depends on so called Common Ordinary Subtypes
+(COST) in this chapter. Recall that the disjointness
+algorithm discussed in \Cref{sec:inter} is set-based (LOS).
+The COST defined in this chapter is not set-based.
+We also prove the equivalence of standard disjointness specifications
+and a variant based on COST in this chapter.
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[!h]
+      \begin{small}
+      \begin{center}
+        \begin{tabular}{rcl}
+          \toprule
+          $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[A \/ B]] \mid [[A /\ B]] \mid [[Null]] $ \\
+          $[[e]]$ & $\Coloneqq$ & $ [[x]] \mid [[i]] \mid [[\x.e]] \mid [[e1 e2]] \mid [[switch e A e1 B e2]] \mid [[null]]$\\
+          $[[v]]$ & $\Coloneqq$ & $ [[i]] \mid [[\x.e]] \mid [[null]] $ \\
+          $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]] $ \\
+          \bottomrule
+        \end{tabular}
+
+        \drules[s]{$[[A <: B]]$}{Subtyping}{top, int, bot, null, arrow, ora, orb, orc, anda, andb, andc}
+        \drules[ord]{$[[ordinary A]]$}{Ordinary Types}{int,arrow,null}
+        \drules[uo]{$[[UO A]]$}{Union Ordinary Types}{top,int,arrow,unit,and}
+        \drules[usp]{$[[B <=u A u=> C]]$}{Union Splittable Types}{or,orandl,orandr}
+      \end{center}
+      \end{small}
+  \caption{Syntax, subtyping, ordinary, union ordinary and union splittable types for \name with intersection types.}
+  \label{fig:cost:syntax:sub}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph{Syntax and subtyping.}
+Syntax and the subtyping stays the same as in
+\name with intersection types and are shown in
+\Cref{fig:cost:syntax:sub}. Types, expressions,
+values, context and subtyping have already
+been explained. Subtyping relation preserves
+the standard properties of reflexivity and
+transitivity.
+
+\begin{lemma}[Subtyping Reflexivity]
+  $[[A <: A]]$
+\label{lemma:union:cost:sub:refl}
+\end{lemma}
+
+\begin{lemma}[Subtyping Transitivity]
+  If $[[A <: B]]$ and $[[B <: C]]$ then $[[A <: C]]$
+\label{lemma:union:cost:sub:trans}
+\end{lemma}
+
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     %\drules[ord]{$[[ordinary A]]$}{Ordinary Types}{int,arrow,null}
+%     \drules[uo]{$[[UO A]]$}{Union Ordinary Types}{top,int,arrow,unit,and}
+%     \drules[usp]{$[[B <=u A u=> C]]$}{Union Splittable Types}{or,orandl,orandr}
+%   \end{small}
+%   \caption{Union ordinary, and union splittable types.}
+%   \label{fig:cost:usp:uo}
+% \end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+\section{Common Ordinary Subtypes (COST)}
+
+COST play an integral role in the design of the disjointness algorithm
+presented in this chapter. This section explains the COST in
+detail by discussing the COST specifications as well as
+the corresponding algorithm that computes COST.
+
+\paragraph{COST Specifications.}
+The specifications for the COST are shown in \Cref{cost:specs:def}.
+It trivially states that two types $[[A]]$ and $[[B]]$
+share a COST if there exist an ordinary type $[[C]]$
+such that $[[C]]$ is subtype of $[[A]]$ and $[[B]]$.
+The ordinary types are shown in the middle of \Cref{fig:cost:syntax:sub}.
+$[[Int]]$, $[[A->B]]$, and $[[Null]]$ constitute ordinary types.
+
+
+\begin{definition}[COST Specifications]
+\label{cost:specs:def}
+    A $\sqcap_s$ B $\Coloneqq$ $\exists$ C, $[[ordinary C]]$ and $[[C <: A]]$ and $[[C <: B]]$ \\
+\end{definition}
+
+\paragraph{Union ordinary and union splittable types.}
+Union ordinary and union splittable types are shown at the bottom in
+\Cref{fig:cost:syntax:sub}. These types have already been discussed
+in \Cref{chap:disjointness}. Union ordinary types include
+$[[Top]]$, $[[Int]]$,
+$[[A->B]]$, $[[Null]]$ and an intersection of union
+ordinary types. Any type that is not union ordinary is
+union splittable.
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[cost]{$[[cost A B]]$}{Common Ordinary Subtypes}{top,ordl,ordr,int,null,arrow,orla,orlb,orra,orrb,andl,andr}
+  \end{small}
+  \caption{Common ordinary subtypes based on union splittable types for \name.}
+  \label{fig:cost:cost}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph{COST Algorithm.}
+The algorithm that computes COST is shown in \Cref{fig:cost:cost}.
+In essence, the COST algorithm computes whether two given types
+potentially share an ordinary subtype or not.
+\Rref{cost-top} states that $[[Top]]$ shares an ordinary
+subtype with $[[Top]]$. This is trivially true, such as $[[Int]]$
+is a subtype of $[[Top]]$. \Rref{cost-ordl,cost-ordr} state that
+$[[Top]]$ shares an ordinary subtype with all the ordinary types.
+\Rref{cost-int,cost-null,cost-arrow} are the natural rules for
+$[[Int]]$, $[[Null]]$, and $[[A->B]]$ respectively.
+
+\Rref{cost-orla,cost-orlb,cost-orra,cost-orrb} deal with the
+union splittable types. These rules collectively state that
+if a type $[[B]]$ shares an ordinary subtype with a part ($[[A1]]$ or $[[A2]]$) 
+of union splittable type ($[[A1 <=u A u=> A2]]$), then $[[B]]$
+shares an ordinary subtype with $[[A]]$. This due to the fact that parts
+($[[A1]]$ and $[[A2]]$) of a union splittable type
+are subtypes of the original type ($[[A]]$).
+\Rref{cost-andl,cost-andr}
+deal with the intersection types. An intersection type 
+$[[A1/\A2]]$ shares a ordinary subtype with $[[B]]$
+if $[[A1]]$ shares an ordinary subtype with $[[B]]$,
+$[[A2]]$ shares an ordinary subtype with $[[B]]$, and
+$[[A1]]$ shares an ordinary subtype with $[[A2]]$.
+A side condition of union ordinary $[[B]]$ ($[[UO B]]$)
+must also hold. Note that the side condition of $[[UO B]]$
+is essential. The COST algorithm will not be sound without
+this condition.
+
+\paragraph{Soundness and completeness of COST algorithm.}
+We prove that the COST algorithm is sound and complete with
+respect to the COST specifications.
+
+\begin{lemma}[COST Soundness]
+  $[[cost A B]]$ $\rightarrow$ A $\sqcap_s$ B.
+\label{lemma:cost:sound}
+\end{lemma}
+
+\begin{lemma}[COST Completeness]
+  A $\sqcap_s$ B $\rightarrow$ $[[cost A B]]$.
+\label{lemma:cost:complete}
+\end{lemma}
+
+
+\section{Disjointness}
+
+The disjointness for \name is the converse of COST.
+Two types are disjoint if they do not share any ordinary subtype.
+Whereas, the COST algorithm states the otherwise.
+Therefore, the disjointness is simply the negation of COST and
+is shown in \Cref{cost:disj:def}.
+
+\begin{definition}[Disjointness Algorithm]
+\label{cost:disj:def}
+    A $*_a$ B $\Coloneqq$ $\neg$ ($[[cost A B]]$) \\
+\end{definition}
+
+
+\paragraph{Disjointness equivalence.}
+We prove that the novel disjointness based on
+COST is sound and complete with respect to standard disjointness
+specifications. The disjointness specifications are shown again 
+in \Cref{def:cost:disj} for readability.
+
+\begin{definition}[$[[/\]]$-Disjointness]
+\label{def:cost:disj}
+  % A $*_s$ B $\Coloneqq$ $\forall$ C, \ $[[ordinary C]]$ \ $\Longrightarrow$ \ $\neg([[C <: A]]$ and $[[C <: B]]$).
+  $[[A *s B]]$ $\Coloneqq$ $\nexists$ C, $[[ordinary C]]$ and $[[C <: A]]$ and $[[C <: B]]$.
+\end{definition}
+
+\begin{lemma}[Disjointness equivalence]
+  $[[A *s B]]$ $\leftrightarrow$ $\neg$ (A $\sqcap_s$ B)
+\label{lemma:cost:disj:sound}
+\end{lemma}
+
+
+% \begin{lemma}[Disjointness completeness]
+%   $\forall$ $[[A]]$ $[[B]]$, $\neg$ (A $\sqcap_s$ B) $\rightarrow$ $[[A *s B]]$.
+% \label{lemma:cost:disj:complete}
+% \end{lemma}
+
+
+\section{Typing, Operational Semantics, and Type-safety}
+
+The typing and the operational semantics do not essentially
+require revision for this chapter and are shown in \Cref{fig:cost:typ}.
+Both of these relations are standard and have already been
+explained.
+
+\paragraph{Type-safety and determinism.}
+The standard properties of the type-safety consisting
+of type preservation and the progress hold in this system.
+\Cref{lemma:cost:preservation} states type preservation 
+and the \Cref{lemma:cost:progress} states progress.
+We also show that the reduction is deterministic
+(\Cref{lemma:cost:determinism}).
+
+\begin{theorem}[Type Preservation]
+\label{lemma:cost:preservation}
+  If \ $[[G |- e : A]]$ and $[[e --> e']]$ then $[[G |- e' : A]]$.
+\end{theorem}
+
+\begin{theorem}[Progress]
+\label{lemma:cost:progress}
+If \ $[[G |- e : A]]$ then either $[[e]]$ is a value;
+or $[[e]]$ can take a step to $[[e']]$.
+\end{theorem}
+
+\begin{theorem}[Determinism]
+\label{lemma:cost:determinism}
+  If \ $[[G |- e : A]]$ and \ $[[e --> e1]]$ and \ $[[e --> e2]]$ then $[[e1]]$ = $[[e2]]$.
+\end{theorem}
+
+\begin{figure}[t]
+    \begin{small}
+    \centering
+    \drules[typ]{$[[G |- e : A]]$}{Typing}{int,null,var,app,sub,abs,and,switch}
+    \drules[step]{$[[e --> e']]$}{Operational semantics}{appl,appr,beta,switch,switchl,switchr}
+  \end{small}
+  \caption{Typing for \name.}
+  \label{fig:cost:typ}
+\end{figure}

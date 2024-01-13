@@ -1,0 +1,1416 @@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Togetherness: Switches and Merges}
+\label{chap:merge}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%%%%%% Overview %%%%%%%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{Overview}
+\name and its extensions discussed so far mainly
+revolve around deterministic type-based elimination
+of union types. \Cref{sec:union} discusses a 
+simple \name calculus and introduces the key ideas
+including disjointness. \Cref{sec:inter} enriches 
+\name with more advance features including subtyping 
+distributivity, nominal types, and intersection types.
+\Cref{sec:discussion:poly} and \Cref{chap:disjointness}
+further study \name with disjoint polymorphism.
+The restriction of overlapping types in alternative
+branches of a type-based switch expression by employing
+disjointness has been an integral part of the study so far.
+
+We study \name with intersection types in 
+\Cref{sec:inter}, but so far, none of the calculi in
+this thesis studies a respective term level construct
+to introduce intersection types.
+% Calculi discussed so far support intersection types
+% at type-level but do not support respective expression at term level
+% to introduce intersection types. 
+In this chapter we extend \name with a so called merge 
+operator\citep{reynolds1988preliminary,dunfield2014elaborating},
+which acts as a term to introduce intersection
+types. The resulting calculus is called \namems i.e. union
+calculus with the merge operator. Intersection types are
+useful without the merge operator but the merge operator
+increases term level expressiveness of the calculus.
+The merge operator has been studied by various researchers
+in literature \citep{oliveira2016disjoint,dunfield2014elaborating,reynolds1988preliminary,Huang:typedirected}. 
+Calculi with the merge operator are known to have
+wide practical applications. The merge operator
+together with the intersection types is naturally
+able to encode various advanced programming features
+such as nested composition \citep{bi_et_al:LIPIcs:2018:9227}, 
+multi-field records from single-field records 
+\citep{reynolds1988preliminary}, and function overloading 
+\citep{castagna1995calculus,reynolds1988preliminary} among others.
+
+\paragraph{Essence of the merge operator.}
+The typical introduction rule for the intersection types without
+the merge operator is:
+
+\begin{center}
+  \drule[]{typ-and}
+\end{center}
+
+\noindent \Rref{typ-and} allows to construct certain terms
+of intersection types, such as:
+
+\begin{mathpar} 
+  \inferrule* [Right=\rref*{typ-and}]
+   { [[1:Int]] \\ [[1:Int]] }
+   {[[1:Int/\Int]]}
+\end{mathpar}
+
+% \begin{lstlisting}
+% 1:Int   1:Int
+% --------------
+%   1:Int&Int
+% \end{lstlisting}
+
+or
+
+\begin{mathpar} 
+  \inferrule* [Right=\rref*{typ-and}]
+   { [[1:Int]] \\ [[1:Top]] }
+   {[[1:Int/\Top]]}
+\end{mathpar}
+
+\noindent Perhaps a more useful program with typical introduction rule
+for intersection types is:
+
+\begin{mathpar} 
+  \inferrule* [Right=\rref*{typ-and}]
+   { [[\x.x:Int->Int]] \\ [[\x.x:Bool->Bool]] }
+   {[[\x.x:Int->Int/\Bool->Bool]]}
+\end{mathpar}
+
+% \begin{lstlisting}
+% 1:Int   1:Top
+% --------------
+%   1:Int&Top
+% \end{lstlisting}
+
+\noindent However, this rule does not have enough expressiveness
+to type-check a program consisting of non-overlapping types,
+for example, $[[Int]]$ and $[[Bool]]$.
+A part of such a program is an integer, and the other part is a
+boolean. Theoretically, since intersection types correspond
+to product types, in our work a pair expresses such program with
+product types as:
+
+\begin{center}
+$[[(1,true)]]$ : $([[Int]],[[Bool]])$
+\end{center}
+
+%\noindent 
+\noindent Such a pair of non-overlapping product types suggests
+the need of an equivalent expression in programming languages
+to introduce
+non-overlapping intersection of types i.e. $[[Int/\Bool]]$.
+The merge operator ($[[e1,,e2]]$) \citep{reynolds1988preliminary,dunfield2014elaborating,oliveira2016disjoint} 
+is capable of expressing such programs with intersection types.
+The introduction rule for intersection types in the presence
+of merge operator is:
+
+\begin{center}
+  \drule[]{typ-merga}
+\end{center}
+
+% \begin{lstlisting}
+% e1:A   e2:B
+% ----------------
+%   e1,,e2:A&B
+% \end{lstlisting}
+
+\noindent The expression $[[e1,,e2]]$ is called the merge operator.
+Notice that the two expressions in the premise of
+\rref{typ-merga} could be two different expressions.
+This is in contrast to the \rref{typ-and} where the expression
+stays the same. Therefore the introduction rule for
+intersection types in the presence of the merge operator allows
+to construct an expression of non-overlapping
+types, such as:
+
+\begin{mathpar} 
+  \inferrule* [Right=\rref*{typ-merga}]
+   { [[1:Int]] \\ [[true:Bool]] }
+   {[[1,,true:Int/\Bool]]}
+\end{mathpar}
+
+\paragraph{Elimination form for pairs and merges.}
+Note that the pairs and merges diverge in their elimination
+form. Pairs are eliminated by explicit elimination constructs
+such as \lstinline{fst} and \lstinline{snd}
+or explicit tags. Whereas the merge operator
+has an implicit elimination form usually via subtyping.
+The direct operational semantics for the merge operator
+is type-dependent \citep{Huang:typedirected}.
+This will be further discussed in later sections. 
+
+% For example, one can write an expression consisting of both 
+% I and S combinator
+% in the presence of merge operator but it's not possible without
+% merge operator. Merge operator enables to write:
+
+% \begin{lstlisting}
+% Int&Bool succNot (x : Int&Bool) {
+%   succ x ,, not x
+% }
+% \end{lstlisting}
+
+% \noindent Function succNot takes an expression of type $[[Int/\Bool]]$. It applies
+% succ to the integer part of input and not to the boolean part of input. It
+% finally returns the merge of results of succ and not.
+% It is important to note that merge operator is symmetric. The order of
+% expressions does not matter, $[[1,,true]]$ is same as $[[true,,1]]$.
+
+% \paragraph{Challenge with switches and merges}
+% A major challenge in a calculus with union types, type based switch expression
+% intersection types and the merge operator is non-determinism.
+% Consider the following code snippet:
+
+% \begin{lstlisting}
+% Int | Bool succNot2 (x : Int | Bool) {
+%   switch (x):
+%       Int  => succ x
+%       Bool => not x
+% }
+
+% succNot2(1,,True)
+% \end{lstlisting}
+
+% In the example above $[[Int]]$ and $[[Bool]]$ clearly are disjoint.
+% However the switch expression
+% is ambugios in the presence of merge operator. Specifically, when x is a merge
+% of type $[[Int /\ Bool]]$. Using the naive subsumption rule x is of type
+% Int and Bool at the same time. Either of the branch can be selected in such
+% scenarios even though the branches itself are disjoint. Thus making the
+% overall calculus non-deterministic.
+% Specifically, either of the branches can be selected when calling 
+% succNot with an input value of 1,,True.
+% This is because $[[1,,true]]$ is an expression of
+% type $[[Int]]$:
+
+
+% \begin{mathpar}
+%   \inferrule*
+%     { \inferrule*
+%       { \inferrule*
+%         { }
+%         {[[G |- 1 : Int]]} \\
+%         \inferrule*
+%         { }
+%         {[[G |- true : Bool]]}
+%       }
+%       {[[G |- 1,,true : Int /\Bool]]} \\
+%       \inferrule*
+%       { }
+%       {[[Int/\Bool <: Int]]}
+%     }
+%     {[[G |- 1,,true : Int]]}
+% \end{mathpar}
+
+% And $[[1,,true]]$ is also an expression of type $[[Bool]]$:
+
+% \begin{mathpar}
+%   \inferrule*
+%     { \inferrule*
+%       { \inferrule*
+%         { }
+%         {[[G |- 1 : Int]]} \\
+%         \inferrule*
+%         { }
+%         {[[G |- true : Bool]]}
+%       }
+%       {[[G |- 1,,true : Int /\Bool]]} \\
+%       \inferrule*
+%       { }
+%       {[[Int/\Bool <: Bool]]}
+%     }
+%     {[[G |- 1,,true : Bool]]}
+% \end{mathpar}
+
+% Therefore, naive combination of disjoint intersection types
+% and disjoint switches result in a non-deterministic calculus.
+% However, type soundness is still preserved and 
+% we give a direct operational semantics. We will further discuss the calculus
+% and approaches to deal with non-determinism in upcoming sections.
+% Dunfield discussed a similar calculas
+% which is non-deterministic and lacks type soundness in source semantics. 
+% We will discuss soundness with respect to Dunfield's system
+% in \Cref{merge:dunfield:cal}.
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%% \namems Calculus %%%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{\namems Calculus}
+
+% We start with an expressive calculus consisting of intersection types,
+% union types, merge operator and a type-based switch expression for
+% union elimination.
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \begin{tabular}{lrcl} \toprule
+      Type & $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[A \/ B]] \mid [[A /\ B]] $ \\
+      Expr & $[[e]]$ & $\Coloneqq$ & $[[x]] \mid [[i]] \mid \mathcolorbox{lightgray}{[[e:A]]} \mid \mathcolorbox{lightgray}{[[\x.e:A->B]]} \mid [[e1 e2]] \mid [[switch e A e1 B e2]] \mid$ \\  
+          &         &     & $\mathcolorbox{lightgray}{[[e1,,e2]]} \mid \mathcolorbox{lightgray}{[[fix x . e . A]]} \mid \mathcolorbox{lightgray}{[[etop]]} $ \\
+      Value & $[[v]]$ & $\Coloneqq$ & $[[i]] \mid [[\x.e:A->B]] \mid \mathcolorbox{lightgray}{[[v1,,v2]]} \mid \mathcolorbox{lightgray}{[[etop]]} $\\
+      %Value & $\mathcolorbox{lightgray}{[[v]]}$ & $\Coloneqq$ & $\mathcolorbox{lightgray}{[[p]] \mid [[p:A]]} $\\
+      Context & $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]]$ \\
+      \bottomrule
+    \end{tabular}
+  \end{small}
+  \begin{small}
+    \centering
+    \drules[s]{$ [[A <: B ]] $}{Subtyping}{top, int, arrow, bot, ora, orb, orc, anda, andb, andc}
+  \end{small}
+  \caption{Syntax and subtyping for \namems.}
+  \label{fig:merge:syntax}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\subsection{Syntax, subtyping, and typing}
+
+\paragraph*{Syntax and subtyping.}
+\Cref{fig:merge:syntax} shows the syntax and subtyping for \namems.
+The notable difference from \name is the addition of the merge 
+operator ($[[e1,,e2]]$) 
+in the syntactic category of expressions.
+%We also introduce a top expression ($[[etop]]$).
+Apart from that, lambda expressions are annotated with the input and
+output types i.e. $[[\x.e:A->B]]$.
+We also add a fix point operator ($[[fix x . e . A]]$) and a top
+term ($[[etop]]$) in the expressions.
+% Values are now categorized in two classes, pre-values $[[p]]$ and values $[[v]]$ .
+% Pre-values ($[[p]]$) are the values without an explicit type annotation.
+Values are constituted of integers ($[[i]]$), 
+lambda expressions ($[[\x.e:A->B]]$), 
+top expression ($[[etop]]$) and a merge operator consisting of all the values 
+is also a value ($[[v1,,v2]]$).
+Types and the context stay the same as in \name with intersection types.
+Subtyping is also standard for a calculus with intersection and union types.
+Note that subtyping does not deal with distributivity rules.
+\Rref{s-top,s-int,s-arrow,s-bot,s-ora,s-orb,s-orc} are already explained.
+\Rref{s-and,s-andb,s-andc} deal with intersection types.
+The subtyping relation for \namems is reflexive and transitive.
+
+\begin{lemma}[Subtyping reflexivity]
+  $[[A <: A]]$
+\label{lemma:merge:sub:refl}
+\end{lemma}
+
+\begin{lemma}[Subtyping transitivity]
+  If $[[A <: B]]$ and $[[B <: C]]$ then $[[A <: C]]$
+\label{lemma:merge:sub:trans}
+\end{lemma}
+
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[typ]{$ [[G |- e : A]] $}{Typing}{var,int,sub,app,absann,switcha,ann,merga,fix}
+    % \vspace{-0.8cm}
+    % \begin{center}
+    %   \drule[]{typ-ann}
+    %   % \mathcolorbox{lightgray}{\drule[]{typ-merga}} \hspace{1cm}
+    %   \mathcolorbox{lightgray}{\drule[]{typ-fix}}
+    % \end{center}
+  \end{small}
+  \caption{Typing for \namems.}
+  \label{fig:merge:typing}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph*{Typing.}
+\Cref{fig:merge:typing} shows the typing rules for \namems.
+% A notable difference is in \rref{typ-appm}. Notice that the first
+% expression ($[[e1]]$) carries type annotations in conclusion.
+% This is important for the type-safety in the presence of merge
+% operator. The metatheory for type-safety becomes non-trivial otherwise.
+A notable difference is the addition of \rref{typ-merga,typ-fix,typ-ann}.
+\Rref{typ-merga} is the typing rule for the
+newly added merge operator. This rule states that
+if an expression $[[e1]]$ has type $[[A]]$ and an expression $[[e2]]$
+has type $[[B]]$, then the merge of $[[e1]]$ and $[[e2]]$ has type
+$[[A /\ B]]$. \Rref{typ-fix} is a standard typing rule for the
+fix point operator. Similarly \rref{typ-ann} is the standard typing
+rule for type annotations.
+% We also add a new rule to type-check the applications
+% without an extra annotations with the functions (\rref{typ-appabs}).
+% The \rref{typ-appabs} simplifies the value representation in the calculus.
+The rest of the rules are standard and have already
+been discussed.
+
+Unlike disjoint intersection types~\citep{oliveira2016disjoint},
+we do not impose a disjointness restriction in \rref{typ-merga}.
+Notice that the disjointness restriction has also been scrapped in 
+\rref{typ-switcha}. This is because the addition of the merge operator
+makes determinism non-trivial. Therefore we present a simple
+calculus without disjointness
+restriction and the calculus is not deterministic.
+Determinism and its challenges are further discussed in 
+\cref{sec:merge:non:determinism}.
+%We elaborate non-determinism with the help of an example.
+Using \rref{typ-merga} we can construct the following program
+which may be a source of non-determinism.
+
+\begin{mathpar}
+  \inferrule* [Right=\rref*{typ-merga}]
+  { [[1:Int]] \\ [[2:Int]] }
+  {[[1,,2 : Int/\Int]]}
+\end{mathpar}
+
+\noindent When applying \lstinline{succ} function to the argument 
+\lstinline{$[[1,,2]]$} the result may either be $[[2]]$ or $[[3]]$.
+Another source of non-determinism in this calculus is:
+
+\begin{lstlisting}[language=Scala]
+  Bool isInt (x : Int|Bool) = switch (x)
+                                (x:Bool)  -> false
+                                (y:Int)   -> true
+\end{lstlisting}
+
+\noindent The above program
+may return different value depending on the order of the branches
+if a value of type $[[Int/\Bool]]$ is passed,
+such as $[[1,,true]]$.
+Moreover, even though $[[Bool]]$ and $[[Int]]$ are 
+non-overlapping types, the program may fall either in the first or the 
+second branch. This is because the type of $[[x]]$
+(when x is $[[1,,true]]$)
+is a subtype of both $[[Bool]]$ and $[[Int]]$.
+By employing \rref{typ-sub} $[[x]]$ can be treated as value of both types
+i.e. $[[Bool]]$ and $[[Int]]$.
+% This gets worst with non-overlapping types in different branches of
+% a switch expression.
+
+
+
+\subsection{Type casting}
+
+Type casting lies at the core of the calculi with
+direct operational semantics 
+for the merge operator \citep{Huang:typedirected}. 
+Generally speaking, type casting makes an expression 
+consistent with the type under which that expression is cast.
+%It enables type directed operational semantics. 
+For example when
+an expression $[[1,,true]]$ casts under type $[[Int]]$ it gives 
+$[[1]]$ and $[[true]]$ when it casts under the type $[[Bool]]$. 
+% This makes merge operator
+% symmetric and semantics doesn't depend upon the biased choice
+% i.e left biased or right biased.
+In summary, type casting enables extracting
+the value of a specific type from the merge operator.
+For example:
+
+\begin{center}
+$[[1,,true --> Int 1]]$ \ \ \ (applying \rref{cst-mergl})
+\end{center}
+
+\noindent In this example
+($[[1,,true --> Int 1]]$) when we cast a merge of $[[1,,true]]$
+under the type $[[Int]]$ it results in $[[1]]$. This is because
+of the fact that the only integer we can get from a merge of 
+$[[1,,true]]$ is $[[1]]$. Similarly $[[true,,1]]$ also yields 
+$[[1]]$ when casts under the type $[[Int]]$:
+
+\begin{center}
+$[[true,,1 --> Int 1]]$ \ \ \ (applying \rref{cst-mergr})
+\end{center}
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[ord]{$[[ordinary A]]$}{Ordinary Types}{int,arrow}
+    \drules[cst]{$[[v]] \longrightarrow_{[[A]]} [[v']]$}{Type Casting}{top,int,orl,orr,arrow,mergl,mergr,merg}
+  \end{small}
+  \caption{Type casting for \namems.}
+  \label{fig:merge:cast}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph{Type casting relation.}
+The type casting relation is shown in \Cref{fig:merge:cast}.
+The relation $[[v -->A v']]$ shows casting of a value $[[v]]$ under
+type $[[A]]$ to another value $[[v']]$.
+Note that the type casting is only applicable to values.
+%It takes a value $[[v]]$ and returns another value $[[v']]$.
+We elaborate each rule next.
+
+When casting an expression under $[[Top]]$
+type it results in $[[Top]]$ expression as stated in \rref{cst-top}.
+Casting an integer under $[[Int]]$ returns the same integer.
+Casting rules for union types are interesting. If an expression casts
+under a part of the union type then that expression casts under whole
+union type as stated in \rref{cst-orl,cst-orr}.
+Casting a lambda expression under a function type returns
+the same lambda expression as stated in \rref{cst-arrow}.
+A merge operator casts under an ordinary type if either part of the merge
+operator casts under that ordinary type (\rref{cst-mergl,cst-mergl}). 
+Casting an expression under an intersection
+type results in a merge (\rref{cst-merg}).
+Type casting preserves the standard properties of
+type preservation and progress:
+
+\begin{itemize}
+  \item Type casting preservation 
+      (\Cref{lemma:merge:cast:preservation}), which states that
+      if an expression $[[v]]$ type casts under type $[[A]]$ to
+      some expression $[[v']]$, then $[[v']]$ has type $[[A]]$.
+  \item Type casting progress
+      (\Cref{lemma:merge:cast:progress}), which states that if
+      an expression $[[v]]$ has type $[[A]]$, then $[[v]]$
+      type casts under $[[A]]$ to some $[[v']]$.
+\end{itemize}
+
+\begin{theorem}[Type Casting Preservation]
+\label{lemma:merge:cast:preservation}
+  If \ $[[v : A]]$ and $[[v -->A v']]$ then $[[G |- v' : A]]$.
+\end{theorem}
+
+
+\begin{theorem}[Type Casting Progress]\label{lemma:merge:cast:progress}
+If \ $[[ [] |- v : A]]$ then $[[v -->A v']]$
+\end{theorem}
+
+\Cref{lemma:merge:cast:preservation,lemma:merge:cast:progress}
+are vital in proving the type-safety of the calculus.
+Notice that the type casting relation is non-deterministic which
+results in non-deterministic semantics. For the illustration purpose,
+think for a moment what will be the result of the following
+type cast?
+
+\begin{center}
+$[[true,,1 --> Int\/Bool ??]]$
+\end{center}
+
+\noindent It can either result in $[[1]]$ or $[[true]]$ depending upon the type casting
+rule we apply:
+
+\begin{center}
+$[[1,,true --> Int\/Bool 1]]$ \ \ \ (applying \rref{cst-orl})
+\end{center}
+
+
+\begin{center}
+$[[1,,true --> Int\/Bool true]]$ \ \ \ (applying \rref{cst-orr})
+\end{center}
+
+
+\subsection{Operational semantics}
+
+%\paragraph{Operational semantics.}
+The operational semantics for \namems is shown
+in \Cref{fig:merge:red}. \Rref{step-appl,step-appr}
+are standard reduction rules.
+% \Rref{step-apparrow} converts a lambda
+% expression with one type annotation into the lambda expression 
+% with two type annotations.
+% \Rref{step-apppexpr} adds a type annotation with the argument
+% of the lambda expression if the argument is a pre-value $[[p]]$.
+\Rref{step-abeta} is the beta reduction rule.
+This rule first type casts the argument under the input type and then
+substitutes the argument in the body of the lambda expression.
+Type casting drops the unnecessary part from the argument and makes
+the input value consistent with the input type of applied function.
+For example:
+
+\begin{center}
+$[[(\x.true,,x :Int->Bool) (1,,true)]]$
+\end{center}
+
+\noindent A merge of $[[1,,true]]$ is the input being passed to lambda 
+expression annotated with an input type
+of $[[Int]]$. Since the dynamic type of $[[1,,true]]$ 
+is $[[Int/\Bool]]$ which is a
+subtype of $[[Int]]$. The above application type-checks.
+But before passing $[[1,,true]]$ to the lambda body it will be cast under
+the input type i.e $[[Int]]$ to make input value and the input type consistent:
+
+\begin{center}
+$[[1,,true -->Int 1]]$
+\end{center}
+
+\noindent The application $[[(\x.true,,x :Int->Bool) (1,,true)]]$
+will result in $[[true,,1:Bool]]$ after beta-reduction.
+We show the partial derivation next:
+
+\begin{small}
+\begin{mathpar}
+  \inferrule* [Right=\rref*{step-abeta}]
+      { \inferrule* [Right=\rref*{cst-mergl}]
+        { }
+        {[[1,,true -->Int 1]]}
+      }
+      %   \inferrule*
+      %   { \inferrule*
+      %     { }
+      %     {[[true,,(1:Int) -->Bool true]]} 
+      %   }
+      %   {[[(true,,1:Int):Bool:Bool --> true:Bool]]}
+      % }
+      % {[[(\x. true,,x : Int -> Bool : Int -> Bool) (1,,true) --> (true,,1:Int):Bool:Bool]]} 
+   {[[(\x.true,,x :Int->Bool) (1,,true) --> true,,1 : Bool]]}
+\end{mathpar}
+\end{small}
+
+\noindent Note that the expression
+$[[true,,1:Bool]]$ is not a value. \Rref{step-annv}
+reduces such annotated values.
+The expression ($[[true,,1:Bool]]$) takes one
+more step following the \rref{step-annv} and results in $[[true]]$.
+This is illustrated by the following derivation:
+
+\begin{small}
+\begin{mathpar}
+  \inferrule* [Right=\rref*{step-annv}]
+      { \inferrule* [Right=\rref*{cst-mergr}]
+        {[[true -->Bool true]]}
+        {[[1,,true -->Bool true]]}
+      }
+      %   \inferrule*
+      %   { \inferrule*
+      %     { }
+      %     {[[true,,(1:Int) -->Bool true]]} 
+      %   }
+      %   {[[(true,,1:Int):Bool:Bool --> true:Bool]]}
+      % }
+      % {[[(\x. true,,x : Int -> Bool : Int -> Bool) (1,,true) --> (true,,1:Int):Bool:Bool]]} 
+   {[[true,,1 : Bool --> true]]}
+\end{mathpar}
+\end{small}
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  %\begin{small}
+    \centering
+    \drules[step]{$[[e]]$ $\longrightarrow$ $[[e']]$}{Small-step operational semantics}{appl,appr,abeta,dispatch,mergl,mergr,ann,annv,fix,switch,switchlm,switchrm}
+  %   \begin{tabular}{ll}
+  %     \drule[]{step-switchl} & \drule[]{step-switchr}
+  %   \end{tabular}
+
+   %\end{small}
+  \caption{Operational semantics for \namems.}
+  \label{fig:merge:red}
+\end{figure}
+
+%---------------------------------------------------------------------------%
+
+% $[[true,,1:Bool:Bool]]$ is not a value, therefore it further reduces to
+% $[[true:Bool]]$ by the following derivation:
+
+% \begin{small}
+%   \begin{mathpar}
+%     \inferrule* [Right=\rref*{step-annv}]
+%       { \inferrule* [Right=\rref*{cst-mergl}]
+%         { }
+%         {[[true,,1 -->Bool true]]}
+%       }
+%       {[[true,,1:Bool:Bool --> true:Bool]]}
+%   \end{mathpar}
+% \end{small}
+
+% Type casting is lies at the core of direct operational semantics for
+% calculi with the merge operator and is explained next.
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  %\begin{small}
+    \centering
+
+    \drules[apd]{$[[e -->d e']]$}{Applicative dispatch}{mleft,mright,both}
+
+    {\renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|lll|}
+      \multicolumn{3}{c}{Dynamic Type $[[dyntype v]]$} \\
+      \hline
+      $[[dyntype i]]$ & = & $[[Int]]$ \\
+      $[[dyntype etop]]$ & = & $[[Top]]$ \\
+      $\lfloor[[\x.e:A->B]]\rfloor$ & = & $[[A->B]]$ \\
+      $[[dyntype v1,,v2]]$ & = & $[[dyntype v1]] [[/\]] [[dyntype v1]]$ \\
+      \hline
+      \end{tabular} }
+      {\renewcommand{\arraystretch}{1.2} \ \ \
+      \begin{tabular}{|lll|}
+      \multicolumn{3}{c}{Input Type $[[inptype v]]$} \\
+      \hline
+      $\lfloor[[\x.e:A->B]]\rfloor^{\lambda}$ & = & $[[A]]$ \\
+      $[[inptype v1,,v2]]$ & = & $[[inptype v1]] [[\/]] [[inptype v1]]$ \\
+      $[[inptype i]]$ & = & $[[Bot]]$ \\
+      $[[inptype etop]]$ & = & $[[Bot]]$ \\
+      \hline
+    \end{tabular} }
+
+   %\end{small}
+  \caption{Dynamic dispatch, dynamic type and input type relation for \namems.}
+  \label{fig:merge:app:dispatch}
+\end{figure}
+
+
+%\paragraph*{Other reduction rules.}
+\noindent \Rref{step-mergl,step-mergr} reduce the left and right part
+of the merge operator.
+% \Rref{step-mergb,step-mergc,step-mergann}
+% pull the type annotation (if any) from the merge
+% operator at the top level.
+\Rref{step-anno} reduces an annotated
+expression.
+\Rref{stepswitch,step-switchl,step-switchr} are the standard 
+reduction rules as in \name and are already discussed.
+% \Rref{step-switchval} drops type annotation from scrutinee
+% in a switch expression. The switch expression operates on dynamic type.
+% Therefore, dropping a static type does not harm the system.
+Finally, \rref{step-fix} is a standard reduction rule for the
+fix point operator. It replaces the fix point with $[[x]]$
+in its own body. The \rref{step-dispatch} requires detailed
+explanation and is discussed next.
+
+
+\subsection{Applicative dispatch and rule step-dispatch}
+% \Rref{step-annv} casts values under the annotated type and
+% drops type annotation from the resultant value.
+% To illustrate a specific use case of \rref{step-annv},
+Sometimes lambda expression maybe hidden inside a merge.
+The \rref{step-dispatch} deals with such cases.
+% Recall that the \rref{typ-appm} carries function type
+% annotations with the first expression in applications.
+% The type annotations in \rref{typ-appm} are used to
+% choose the appropriate function from a merge.
+% \rref{step-annv} type casts a 
+% merge under a function type to get the hidden function
+% from the merge.
+The \rref{step-dispatch} uses another
+relation called applicative dispatch \citep{xue2022applicative}.
+Applicative dispatch relation is shown at the upper part of
+\Cref{fig:merge:app:dispatch}. Essentially, applicative
+dispatch selects the appropriate function for application
+from the merge depending upon the argument type.
+Moreover, it provides the adequacy of function overloading.
+For example:
+
+\begin{center}
+$[[((\x.succ:Int->Int) ,, true) 1]]$
+\end{center}
+
+\noindent The above application is valid and type-checks. We need to extract
+$[[(\x.succ:Int->Int)]]$ out of this merge and then apply it to
+the argument $[[1]]$. Note that it is essential to choose
+$[[(\x.succ:Int->Int)]]$ in this case. The calculus will not
+be type preserving otherwise. This is due to the fact that
+($[[true 1]]$) is not a valid application.
+The problem gets worst if the merge contains multiple functions.
+Therefore special care needs to be taken to choose the
+appropriate function for application. Applicative dispatch
+compares the argument type with the input type of each
+expression in the merge. It then applies all of the overlapping
+functions. The derivation for $[[((\x.succ:Int->Int) ,, true) 1]]$
+is shown below:
+
+%\baber{Show the derivation.}
+\begin{small}
+\begin{mathpar}
+  \inferrule* [Left=\rref*{step-dispatch}]
+    { \inferrule* [Left=\rref*{apd-mleft}]
+      {
+        [[Int <: Int]] \\ \neg ([[Int <: Bot]])
+      }
+      {[[(\x.succ:Int->Int ,, true) --> (\x.succ:Int->Int) 1]]}
+    }
+    {[[(\x.succ:Int->Int ,, true) 1 --> (\x.succ:Int->Int) 1]]}
+\end{mathpar}
+\end{small}
+
+\noindent The expression ($[[(\x.succ:Int->Int) 1]]$) becomes a 
+standard application with lambda expression at the left side
+and reduces by following the standard beta reduction.
+
+\paragraph{Applicative dispatch relation.}
+\Rref{adp-mleft} applies the left part of the merge to the argument.
+It consist of two premises. The first premise states that
+the dynamic type of the argument is a subtype of
+the input type of left part of merge. While second premise 
+states that the dynamic type of the argument is not a subtype of 
+the input type of right part of the merge.
+If both of the conditions succeed, this rule
+applies left part of the merge to the argument.
+For example consider the following application:
+
+\begin{center}
+$[[((\x.succ:Int->Int) ,, (\x.neg:Bool->Bool)) 1]]$
+\end{center}
+
+The functional merge consists of two functions,
+\lstinline{$[[succ]]$} and \lstinline{$[[neg]]$}. Input type of
+\lstinline{$[[succ]]$} function is $[[Int]]$ and the input type
+of \lstinline{$[[neg]]$} function is $[[Bool]]$.
+Note that the dynamic type of argument $[[1]]$ is $[[Int]]$.
+It is evident that the only function that can be applied to $[[1]]$
+among \lstinline{$[[succ]]$} and \lstinline{$[[neg]]$} functions is
+\lstinline{$[[succ]]$}. \Rref{adp-mleft} checks that the dynamic
+type of $[[1]]$ is a subtype of $[[Int]]$, and is not a subtype
+of $[[Bool]]$. Therefore \lstinline{$[[succ]]$} is applied to $[[1]]$.
+\Rref{adp-mright} repeats the same for the right part of the merge.
+
+\Rref{adp-both} is interesting. It applies both the left and the right
+part of the merge to the argument and returns a merge of the
+output from both functions. It is applicable in cases where the
+dynamic type of the argument is a subtype of the left as well as the right
+part of the merge. Both the \lstinline{$[[succ]]$} as well as 
+the \lstinline{$[[pred]]$} functions are applicable to $[[1]]$
+in the following application.
+
+\begin{center}
+$[[((\x.succ:Int->Int) ,, (\x.pred:Int->Int)) 1]]$
+\end{center}
+
+%In general, following lemma holds in this system:
+
+% \begin{small}
+% \begin{mathpar}
+% \inferrule* [Left=\rref*{step-abeta}]
+%   {
+%     \inferrule* [Left=\rref*{step-abeta}]
+%     { \inferrule* [Left=\rref*{cst-int}]
+%       { }
+%       {[[1 -->Int 1]]}
+%     }
+%     {[[(\x.succ:Int->Int:Int->Int) (1:Int) --> 2:Int:Int:Int]]} \and
+%     \inferrule*
+%      %{ \inferrule*
+%         { \inferrule* [vdots=3em]
+%           { }
+%           {[[2 --> Int 2]]}
+%         }
+%       %{[[2:Int:Int --> 2:Int]]}
+%      %}
+%      {[[2:Int:Int:Int --> 2:Int]]}
+%   }
+%   {[[(\x.succ:Int->Int:Int->Int) (1:Int) --> 2:Int]]}
+% \end{mathpar}
+% \end{small}
+
+\paragraph{Dynamic type and input type relations.}
+The dynamic type and the input type relations are shown
+in \Cref{fig:merge:app:dispatch}. Dynamic type returns
+the principal type of a value and has already been
+discussed. The input type relation returns the input
+type of a functional value. The functional value is
+either a lambda expression or a merge containing at least
+one lambda expression. The first case of the input type
+deals with lambda expressions. In this case the input
+type simply returns the input type of the given lambda
+expression. The second case deals with functional
+merges. In this case the output is the union of
+the input types of all the lambda expressions in the
+merge. The other values cannot appear on the left
+side of a valid application. Therefore they cannot
+have an input type. We simply return $[[Bot]]$ in
+such cases.
+
+
+\subsection{Metatheory of \namems}
+
+The standard properties of type preservation and progress
+hold in this system.
+Type preservation (\Cref{lemma:merge:preservation}) states that
+the types are preserved during reduction.
+The progress (\Cref{lemma:merge:progress})
+states that a well-typed expression is either a value or
+it reduces until it becomes a value.
+Note that the operational semantics is type dependent i.e.
+operational semantics depends upon the casting relation.
+Therefore type preservation depends upon
+type casting preservation (\Cref{lemma:merge:cast:preservation})
+and the progress depends upon type casting progress
+(\Cref{lemma:merge:cast:progress}).
+
+\begin{theorem}[Type Preservation]
+\label{lemma:merge:preservation}
+  If \ $[[G |- e : A]]$ and $[[e --> e']]$ then $[[G |- e' : A]]$.
+\end{theorem}
+
+
+\begin{theorem}[Progress]\label{lemma:merge:progress}
+If \ $[[ [] |- e : A]]$ then either $[[e]]$ is a value;
+or $[[e --> e']]$ for some $[[e']]$.
+\end{theorem}
+
+
+\paragraph{Compelling properties of \namems.}
+We show a few interesting properties of \namems
+in this section. In particular, \cref{lemma:merge:lambdas}
+is essential in \namems. It states that if a value
+$[[v]]$ casts under a function type then the resulting
+value must be a lambda expression.
+\cref{lemma:merge:input:arg:types} states that
+if a value $[[v]]$ checks against a function type $[[A->B]]$
+then the input type from the function type ($[[A]]$) is a subtype of
+the result from input type relation i.e. $[[A <: inptype v]]$.
+\cref{lemma:merge:input:preservation} states that if the dynamic type
+of value $[[v1]]$ is a subtype of the input type of $[[v]]$
+i.e. $[[dyntype v1 <: inptype v]]$ then the value $[[v]]$ checks
+against a function type such that the dynamic type of $[[v]]$
+is the input type of the function.
+\cref{lemma:merge:input:arg:types,lemma:merge:input:preservation}
+are essential for the type preservation of \namems.
+Similarly \cref{lemma:merge:app:progress} is essential for
+the progress. It states that a well-typed application of the merge
+operator must take a step.
+
+
+\begin{lemma}[Casting under a function type]
+  If $[[v -->A->B v']]$, then
+  $\exists$ e A1 B1, $[[v']]$ = $[[\x.e:A1->B1]]$. 
+\label{lemma:merge:lambdas}
+\end{lemma}
+
+\begin{lemma}[Covariance of input type]
+  If \ $[[ [] |- v : A->B]]$ then $[[A <: inptype v]]$.
+  \label{lemma:merge:input:arg:types}
+\end{lemma}
+
+\begin{lemma}[Applicative dispatch preservation]
+  If \ $[[ [] |- v : A]]$ and $[[dyntype v1 <: inptype v]]$ then $[[ [] |- v : dyntype v1 -> Top]]$
+  \label{lemma:merge:input:preservation}
+\end{lemma}
+
+% \begin{lemma}[Covariance of input type]\label{lemma:merge:input:arg:types}
+% If \ $ \exists [[inptype v]]$ then \exists
+% \end{lemma}
+
+\begin{lemma}[Applicative dispatch progress]
+  If \ $[[ [] |- v1,,v2 : A->B]]$ and $[[ [] |- v : A]]$ then $\exists [[e']]$ $[[(v1,,v2) v --> e']]$.
+  \label{lemma:merge:app:progress}
+\end{lemma}
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   % \begin{small}
+%   %   \centering
+%   %   \drules[bl]{$[[botlike A]]$}{Bottom-Like Types}{bot, or}
+%   % \end{small}
+%   % \begin{small}
+%   %   \centering
+%   %   \drules[ad]{$[[A * B]]$}{Algorithmic Disjointness}{btmr, btml, intl, intr, null-intl, null-intr, null-funl, null-funr, orl, orr}
+%   % \end{small}
+%   \begin{small}
+%     \centering
+%     \drules[typ]{$ [[G |- e : A]] $}{Typing}{int, null, sub, app, abs, var, switcha, merga}
+%   \end{small}
+%   \caption{Bottom-like types, algorithmic disjointness and typing for \name.}
+%   \label{fig:merge:typ}
+% \end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%% Dunfield's system %%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+\section{\namems and Dunfield's system}
+\label{merge:dunfield:cal}
+%\baber{Rewrite this paragraph.}
+\cite{dunfield2014elaborating} studies a calculus with 
+intersection types, union types,
+and the merge operator.
+The merge operator acts as an 
+introduction form for intersection types
+and elimination form for union types in their calculus.
+They adopt an elaboration 
+semantics and elaborate the source language to a 
+target language. Dunfield elaborates
+intersection types to product types and union types to sum types.
+% The source language consists of intersection types and union types. Whereas,
+% target language consists of product types and sum types.
+Similarly they elaborate the merge operator to a pair.
+The target language is a standard extension of the simply typed
+lambda calculus with the pairs, sum types, and the product types.
+
+We will explain the Dunfield's type system and prove its
+completeness with respect to \namems in this section.
+In particular, we show that all the programs that Dunfield's
+system type-checks, are type-checked by \namems.
+In contrast to Dunfield's system, we propose a direct
+operational semantics which significantly simplifies the
+theoretical complexity of the system.
+Moreover, contrary to the \cite{dunfield2014elaborating}
+source semantics, the direct operational semantics studied
+in \namems is type-sound.
+
+
+
+
+\subsection{Dunfield's calculus}
+
+\paragraph{Syntax.}
+Syntax for Dunfield's system is shown in the upper part 
+of \Cref{fig:merge:dunfield:syntax}.
+Types consist of $[[Top]]$, $[[Bot]]$, $[[Int]]$, $[[A->B]]$,
+$[[A\/B]]$ and $[[A/\B]]$. Note that the type $[[Bot]]$
+has not been studied
+in original Dunfield's calculus.
+Expressions consist of variables, literals, abstractions,
+applications, merge operator and the fix point operator.
+Note that lambda abstractions ($[[\x.e]]$) do not carry types.
+Similarly, variables, literals, abstractions and a merge of
+values constitute values. The typing context is standard.
+Finally $[[E]]$ represents the evaluation context.
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[!h]
+  \begin{small}
+  \begin{center}
+    \begin{tabular}{lrcl} \toprule
+      Type & $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[A \/ B]] \mid [[A /\ B]] $ \\
+      Expr & $[[e]]$ & $\Coloneqq$ & $[[x]] \mid [[i]] \mid [[\x.e]] \mid [[e1 e2]] \mid [[e1,,e2]] \mid [[fix x . e]] $\\
+      Value & $[[v]]$ & $\Coloneqq$ & $[[x]] \mid [[i]] \mid [[\x.e]] \mid [[v1,,v2]] $\\
+      Context & $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]]$ \\
+      Evaluation Context & $[[E]]$ & $\Coloneqq$ & $[] \mid [[E e]] \mid [[v E]] \mid [[E,,e]] \mid [[e,,E]]$ \\
+      \bottomrule
+    \end{tabular}
+
+    \drules[dtyp]{$ [[G |-d e : A ~> e']] $}{Dunfield's type system}{int,sub,var,app,abs,merga,mergb,and,andl,andr,orl,orr,switch,fix}
+
+    \end{center}
+  \end{small}
+  \caption{Source syntax and source typing of Dunfield's calculus.}
+  \label{fig:merge:dunfield:syntax}
+\end{figure}
+%---------------------------------------------------------------------------%%
+
+\paragraph{Type system.}
+The Dunfield's type system is shown in \Cref{fig:merge:dunfield:syntax}.
+We suggest the reader to ignore the highlighted part in the rules
+for the sake of simplicity
+at this stage. We will explain the highlighted part later.
+\Rref{dtyp-int,dtyp-sub,dtyp-var,dtyp-app,dtyp-abs}
+are already explained modulo curly arrow and the highlighted part
+in each rule.
+\Rref{dtyp-merga,dtyp-mergb} type-check a merge operator.
+A notable difference in \rref{dtyp-abs} is that
+the lambda expression no longer carries type annotations. 
+\Rref{dtyp-and} is an introduction rule for intersection types.
+It states that if an expression $[[e]]$ has type $[[A]]$
+and type $[[B]]$ then $[[e]]$ has type $[[A/\B]]$.
+This rule is useful to type unannotated lambdas
+as a variant of function overloading, such as:
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{dtyp-and}]
+    { \inferrule*
+      { }
+      {[[\x.e:Int->Int]]} \\
+      \inferrule*
+      { }
+      {[[\x.e:Bool->Bool]]}
+    }
+    {[[\x.e:Int->Int/\Bool->Bool]]}
+\end{mathpar}
+
+\Rref{dtyp-andl,dtyp-andr} are for intersection elimination.
+They state that if an expression $[[e]]$ has type $[[A/\B]]$,
+then the expression $[[e]]$ can have either type $[[A]]$ or type $[[B]]$.
+Similarly \rref{dtyp-orl,dtyp-orr} are for union introduction.
+They state that an expression $[[e]]$ can have type $[[A\/B]]$
+if the expression $[[e]]$ has either type $[[A]]$ or type $[[B]]$.
+Note that the \rref{dtyp-andl,dtyp-andr,dtyp-orl,dtyp-orr} can be subsumed
+by subsumption rule. \Rref{dtyp-switch} is for the union elimination.
+Finally, \rref{dtyp-fix} type-checks fix points.
+Interested readers may refer to the original paper
+\citep{dunfield2014elaborating} for details.
+
+\paragraph{A note on Dunfield's type system.}
+The Dunfield's type system allows certain (hidden) 
+ill-typed parts of the programs. For example the program
+\lstinline{$[[1,,succ true:Int]]$}
+type-checks following the \rref{dtyp-merga}.
+It is important to note that a part of this program i.e. 
+\lstinline{$[[succ true]]$} is ill-typed.
+A closer observation reveals that such ill-typed parts
+of the programs have no practical effects and are
+not essential. Therefore we do not account for such
+ill-typed parts of the programs in our calculus.
+We prove completeness upto the point where all the parts
+of a program are well-typed.
+
+
+\subsection{Completeness with respect to Dunfield's calculus}
+
+The type system of \namems is complete with respect to Dunfield's type system, 
+meaning that all the programs that type-check in Dunfield's system,
+can also be encoded in \namems. We prove completeness by
+elaborating programs that type-check in Dunfield's system
+to \namems. The elaboration of the well-typed programs from
+the Dunfield's system to \namems is explained next. 
+
+\paragraph{Elaboration to \namems.} 
+The highlighted part of rules in \Cref{fig:merge:dunfield:syntax}
+shows the elaborated program in \namems.
+\Rref{dtyp-int,dtyp-var} state that an integer 
+from the Dunfield's system elaborates
+to an integer, and a variable to a variable in \namems respectively.
+\Rref{dtyp-abs} is of significant interest. This rule elaborates
+an un-annotated lambda expression from Dunfield's calculus
+to a type annotated lambda expression
+in \namems i.e. it elaborates $[[\x.e]]$ to $[[\x.e:A->B]]$.
+\Rref{dtyp-and} is also interesting. It elaborates an expression that
+checks against an intersection of two types into a merge of the
+same expressions. The case of unannotated lambda expressions
+is of particular interest with \rref{dtyp-and}.
+The Dunfield's system has unannotated lambda expression
+and the typing \rref{dtyp-and} is able to encode the following program:
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{dtyp-and}]
+    { \inferrule*
+      { }
+      {[[\x.e:Int->Int]]} \\
+      \inferrule*
+      { }
+      {[[\x.e:Bool->Bool]]}
+    }
+    {[[\x.e:Int->Int/\Bool->Bool]]}
+\end{mathpar}
+
+\noindent Whereas \namems cannot encode the above program
+in its current form.
+Therefore we elaborate this program into an equivalent program 
+in \namems and preserve the completeness with respect to 
+the Dunfield's system.
+The elaboration for such a program is shown next:
+
+\begin{mathpar}
+  \inferrule*
+  { }
+  {[[\x. e : Int->Int /\ Bool->Bool]] [[~>]] \mathcolorbox{lightgray}{[[(\x.e:Int->Int),,(\x.e:Bool->Bool)]]}}
+\end{mathpar}
+
+\noindent The expression $[[\x.e]]$ type-checks against $[[Int->Int /\ Bool->Bool]]$
+in the Dunfield's system and
+elaborates to $[[(\x.e:Int->Int),,(\x.e:Bool->Bool)]]$ in \namems. 
+The elaborated program
+type-checks against $[[Int->Int /\ Bool->Bool]]$ in \namems.
+%but not the original program i.e $[[\x.e]]$.
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{typ-merga}]
+  { \inferrule*
+      { }
+      {[[\x.e:Int->Int : Int -> Int]]} \\
+    \inferrule*
+      { }
+      {[[\x.e:Bool->Bool : Bool -> Bool]]}
+  }
+  {[[(\x.e:Int->Int),,(\x.e:Bool->Bool) : Int->Int /\ Bool->Bool]]}
+\end{mathpar}
+
+\paragraph{Completeness.} \Cref{lemma:merge:dunfield:sound} states that
+if an expression $[[e]]$ type-checks in the Dunfield's system against
+type $[[A]]$ and elaborates to $[[e']]$ in \namems
+then $[[e']]$ has type $[[A]]$ in \namems.
+
+\begin{lemma}[Completeness with respect to Dunfield's system]
+  $\forall \ [[G]] \ [[e]] \ [[A]] \ [[e']]$, If $[[G |-d e : A ~> e']]$ then $[[G |- e' : A]]$
+\label{lemma:merge:dunfield:sound}
+\end{lemma}
+
+\paragraph{Comparison of \namems with Dunfield's calculus.}
+% One drawback in Dunfield's calculus is that it is
+% not type-safe in source semantics. On the contrary,
+% we propose a type-safe calculus with direct operational
+% semantics. Our calculus can encode all the programs
+% from Dunfield's system. We show the soundness of our
+% calculus with respect to Dunfield's system next.
+The direct operational semantics proposed by
+\cite{dunfield2014elaborating} are not type preserving.
+Therefore Dunfield adopts an elaboration semantics in her calculus
+which significantly increases the theoretical complexity
+of the calculus.
+A reader has to understand both the source semantics and
+the target semantics to get the intuition of the programs.
+Moreover, elaboration itself is essential to understand.
+On the contrary, we propose a direct operational semantics
+for the source language.
+Direct operational semantics eliminates the need of
+elaboration and target language.
+This leaves only the source operational semantics
+without any intermediary steps.
+
+% Furthermore, Dunfield's system lacks type preservation
+% in source semantics. Although, target semantics
+% in Dunfield's system preserves types.
+% On the contrary, direct operational semantics proposed
+% in our calculus preserves standard properties
+% of type-safety i.e progress and preservation.
+
+
+%---------------------------------------------------------------------------%%
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%% Non-determinism %%%%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{Stumbling block: non-determinism}
+\label{sec:merge:non:determinism}
+
+Determinism is an important property of a calculus in theory.
+%But many practical programming languages lack determinism.
+But the calculus (\namems) proposed in this chapter is non-deterministic.
+The non-determinism comes from two sources in \namems.
+One source is the merge operator and the other is switch expression.
+We explain both of the sources next.
+A few proposals to deal with the non-determinism are discussed in
+\Cref{chap:future}.
+
+\subsection{Non-determinism in the presence of merge operator}
+Recall that \namems drops the disjointness in merges and
+in switches. This allows to construct the merges of overlapping
+types such as $[[1,,2]]$.
+When we construct a merge of $[[1,,2]]$ and try to extract an integer
+out of it using type directed semantic, we may get either 1 or 2.
+
+\begin{center}
+$[[1,,2 --> Int 1]]$ \ \ \ \rref{cst-mergl}
+\end{center}
+
+or
+
+\begin{center}
+$[[1,,2 --> Int 2]]$ \ \ \ \rref{cst-mergr}
+\end{center}
+
+\noindent The operational semantics depends upon the type casting.
+Therefore the evaluation of an expression to two different
+values results in a non-deterministic calculus.
+
+\paragraph{Disjoint intersection types.} 
+Disjoint intersection types \citep{oliveira2016disjoint} 
+address non-determinism
+in the context of intersection types and the merge operator.
+The disjoint intersection types forbid the construction
+of a merge with overlapping types.
+The typing rule for the merge operator with disjoint intersection
+types is:
+
+\begin{center}
+  \drule[]{typ-mergb}
+\end{center}
+
+\noindent The third premise in the rule allows merges of only
+disjoint types or non-overlapping types.
+For example a merge of $[[1,,true]]$ is allowed.
+Whereas $[[1,,2]]$ is not allowed.
+
+
+\subsection{Non-determinism in the presence of switch expression}
+
+The second source of non-determinism in \namems is the
+type-based switch expression.
+For example a naive evaluation of the following program is
+not deterministic:
+
+\begin{center}
+$[[switch (x:Int\/Top) Int true Top false]]$
+\end{center}
+
+\noindent The above switch expression may evaluate either first or the
+second branch in a naive implementation of a switch
+expression. This is due to the fact that the type of scrutinee i.e $[[1]]$ overlaps
+with both $[[Int]]$ and $[[Top]]$. Therefore it may fall in either of
+the two branches. Such non-deterministic programs type-check
+by exploiting the following unconstrained typing rule for the switch expression:
+
+\begin{center}
+  \drule[]{typ-switcha}
+\end{center}
+
+\paragraph{Disjoint switches.}
+The \name (\Cref{chap:switch}) proposes a deterministic 
+solution for such type-based switch expressions.
+Similar to disjoint intersection types, \name allows two branches
+of a type-based switch expression to have only the
+non-overlapping types. The typing rule for a switch expression
+in \name is:
+
+\begin{center}
+  \drule[]{typ-switch}
+\end{center}
+
+\noindent Note the last premise in \rref{typ-switch}. It says that the branches of
+a switch expression must not have overlapping types.
+Therefore the following program does not type-check in \name
+because $[[Int]]$ and $[[Top]]$ are overlapping types:
+
+\begin{center}
+$[[switch (x:Int\/Top) Int true Top false]]$ %\ \ \ {\color{red} //not allowed}
+\end{center}
+
+%Because $[[Int]]$ and $[[Top]]$ are not disjoint types.
+\noindent Whereas the following program type-checks because
+$[[Int]]$ and $[[Bool]]$ are non-overlapping or disjoint types:
+
+\begin{center}
+$[[switch (x:Int\/Bool) Int true Bool false]]$ %\ \ \ {\color{blue}//allowed}
+\end{center}
+
+\noindent Note that the disjointness in disjoint intersection types and
+disjoint switches diverge. Two types are disjoint in disjoint
+intersection types when they do not share a common supertype.
+Whereas two types are disjoint in disjoint switches when they
+do not share a common subtype.
+
+
+
+\subsection{Non-determinism with merge operator and switch expression}
+
+While the non-determinism for merges and switches has been studied separately,
+combining disjoint intersection types and disjoint switches is non-trivial.
+The integration of disjoint intersection types
+and disjoint switches poses novel challenges.
+
+\begin{center}
+$[[(\x. (switch x Int true Bool false) : Int\/Bool -> Bool) (1,,true)]]$
+\end{center}
+
+The above program can be encoded in \namems. It is an application
+of a lambda expression i.e $[[(\x. (switch x Int true Bool false) : Int\/Bool -> Bool)]]$ 
+to a merge i.e $[[(1,,true)]]$. The input type of lambda expression
+is $[[Int\/Bool]]$. It is safe to pass a term of type $[[Int/\Bool]]$
+as $[[Int\/Bool]]$ using the subsumption rule.
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{typ-sub}]
+    { \inferrule* [Left=\rref*{typ-merga}]
+      { \inferrule*
+        { }
+        {[[G |- 1 : Int]]} \\
+        \inferrule*
+        { }
+        {[[G |- true : Bool]]}
+      }
+      {[[G |- 1,,true : Int /\Bool]]} \\
+      \inferrule* [Right=\rref*{s-andb}]
+      { \inferrule* [Right=\rref*{s-orb}]
+        { \inferrule*
+          { }
+          {[[Int <: Int]]}
+        }
+        {[[Int <: Int\/Bool]]}
+      }
+      {[[Int/\Bool <: Int\/Bool]]}
+    }
+    {[[G |- 1,,true : Int\/Bool]]}
+\end{mathpar}
+
+\noindent In a more human readable language the same program can be written as:
+
+\begin{lstlisting}[language=Scala]
+  Bool isInt (x : Int | Bool) = switch (x)
+                                  (x:Int)  -> true
+                                  (y:Bool) -> false
+
+  isInt(1,,true)
+\end{lstlisting}
+
+% \baber{show derivation of upcasting merge in above example.}
+
+Notice that the merge independently is deterministic
+i.e Int and Bool are disjoint types.
+The switch independently is also deterministic i.e $[[Int]]$
+and $[[Bool]]$ are disjoint types. But the merge value
+$[[1,,true]]$ can fall either in first branch or in second branch.
+This is because the value of type $[[Int/\Bool]]$ can safely
+be used as value of type $[[Int]]$ and $[[Bool]]$ at the same time.
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{typ-sub}]
+    { \inferrule* [Left=\rref*{typ-merga}]
+      { \inferrule*
+        { }
+        {[[G |- 1 : Int]]} \\
+        \inferrule*
+        { }
+        {[[G |- true : Bool]]}
+      }
+      {[[G |- 1,,true : Int /\Bool]]} \\
+      \inferrule* [Right=\rref*{s-andb}]
+      { \inferrule*
+        { }
+        {[[Int <: Int]]}
+      }
+      {[[Int/\Bool <: Int]]}
+    }
+    {[[G |- 1,,true : Int]]}
+\end{mathpar}
+
+and so as:
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{typ-sub}]
+    { \inferrule* [Left=\rref*{typ-merga}]
+      { \inferrule*
+        { }
+        {[[G |- 1 : Int]]} \\
+        \inferrule*
+        { }
+        {[[G |- true : Bool]]}
+      }
+      {[[G |- 1,,true : Int /\Bool]]} \\
+      \inferrule* [Right=\rref*{s-andc}]
+      { \inferrule*
+        { }
+        {[[Bool <: Bool]]}
+      }
+      {[[Int/\Bool <: Bool]]}
+    }
+    {[[G |- 1,,true : Bool]]}
+\end{mathpar}
+
+Therefore a naive composition of disjoint intersection types
+and disjoint switches leads to non-determinism.
+We discuss a few proposals to deal with non-determinism
+in \Cref{chap:future}.
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../Thesis"
+%%% org-ref-default-bibliography: "../Thesis.bib"
+%%% End:

@@ -1,0 +1,70 @@
+%
+\noindent
+%
+
+% A programming language is a tool to communicate with the computers.
+% Several programming languages have been developed over the decades
+% even prior to the invention of very first computer. Each new language
+% comes with the new features.
+
+Languages define the constructs and protocols of communication.
+Programming languages, in particular, define the constructs that
+assist in communicating with machines. With the growing complexity
+and need of software applications, it has become a challenge to
+design an expressive, yet simple programming language. The complexity
+in a language design mostly occurs due to the interaction of
+disparate features. This thesis is an effort in simplifying and formally
+studying the design of intersection and union types in
+programming languages.
+
+Intersection and union types are advance and powerful features
+available in many modern programming languages. Intersection types 
+provide an interface to introduce an expression of multiple types.
+Union types, on the other hand, provide an interface to express an
+expression of variant types. Interaction of intersection and
+union types is known to be non-trivial in theory.
+This thesis examines the interaction of intersection and union types.
+% We study a type-based switch expression for
+% the elimination of union types called \name as a simple extension of
+% simply typed lambda calculas. \name is then extended with more advance
+% features such as intersection types, nominal types, subtyping distributivity,
+% and disjoint polymorphism. \name and its extensions are proven to be
+% type-sound and deterministic. Disjointness lies at the core of \name
+% and its extension to prove determinism. Disjointness ensures that all
+% the branches of a switch expression are non-overlapping.
+Our study starts with a deterministic type-based switch expression
+for the elimination of union types. Disjointness plays an integral
+role in keeping the calculus deterministic, which ensures that no
+two branches of a type-based switch expression overlap. Thus the
+scrutinee falls in a maximum of one branch. The resulting calculus
+is called \name. We further extend \name with powerful and advance
+features of intersection types, subtyping distributivity, nominal
+types, and polymorphism. Moreover, we study \name with the
+merge operator. An extension with the merge operator poses
+novel challenges in determinism.
+
+Intersection and union types are well-known dual features.
+We also examine 
+the duality of intersection and union types formally in this thesis.
+The duality unifies some of the subtyping rules and reduces the theoretical complexity
+of a system with dual features.
+The benefits include the reduction in number of subtyping rules and simplified proofs
+for certain theorems such as subtyping transitivity. 
+All of the metatheory of this thesis has been
+formalized in the Coq theorem prover.
+
+\vspace{1.5\baselineskip}
+
+\noindent\makebox[\linewidth]{\rule{0.7\textwidth}{0.4pt}}
+
+\begin{center}
+\textbf{An abstract of 310 words}
+\end{center}
+
+\newpage
+
+\begin{flushright}
+  \null\vspace{\stretch{1}}
+  \textit{To my late father...}
+  \vspace{\stretch{2}}\null
+\end{flushright}

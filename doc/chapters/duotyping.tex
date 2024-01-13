@@ -1,0 +1,1552 @@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{The Duality of Subtyping (\nameduo)}
+\label{chap:duo}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This chapter examines the duality of subtyping with 
+intersection and union types. Duality is a common concept
+in logic and many features and their duals have been studied. For example,
+disjunctions are dual to conjunctions, universal quantifiers are dual to
+existential quantifiers. Surprisingly, duality has not formally been
+studied in the context of subtyping in programming languages. We start with
+an overview of duality in subtyping, then we discuss several calculi
+with duality and traditional subtyping. Finally, we conclude with
+the help of case studies that by employing duality in subtyping one can achieve
+significant benefits over traditional subtyping.
+
+
+%---------------------------------------------------------------------------%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Section 2 from paper
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\section{Overview}
+\label{sec:overview}
+
+This section gives an overview of \nameduo. We show how to design subtyping
+relations employing \nameduo, and discuss the advantages of a design with \nameduo
+instead of a traditional subtyping formulation in more detail.
+
+% \paragraph*{Duality in subtyping.}
+% In a system with both supertyping and subtyping,
+% the top and bottom subtyping rules can be presented as follows:
+
+% \begin{center}
+%   \begin{tabular}{lll}
+%     \drule{s-top} & & \drule{sup-bot}
+%   \end{tabular}
+% \end{center}
+
+% \noindent Close analysis of \rref{s-top,sup-bot} reveals that only difference
+% in these two rules is the relation. Depending upon the relation upper and lower
+% can be selected. If the relation is subtyping ($[[<:]]$) upper bound is top,
+% if the relation is supertyping ($[[:>]]$) lower bound is bottom.
+% It turns out that these two rules can be composed in one unified rule as:
+
+% \begin{center}
+%        \drule[]{gds-topbot}
+% \end{center}
+
+% where $[[duo]]$ is the mode and is defined as:
+
+% \begin{center}
+% \begin{tabular}{lrcl}
+%   Mode & $[[duo]]$  & $\Coloneqq$ & $[[msub]] \ \mid \ [[msup]]$
+% \end{tabular}
+% \end{center}
+
+% \noindent which can be subtyping ($[[msub]]$) or supertyping ($[[msup]]$).
+% If the mode is subtyping the upper bound of the relation is 
+% the top type, otherwise it is
+% the bottom type. With $\rceil [[duo]] \lceil$ we can then write a single unified
+% \rref{gds-topbot} that captures the upper bounds of subtyping and supertyping, 
+% and which generalizes both \rref{s-top} and \rref{sup-bot}.
+% $\rceil [[duo]] \lceil$ is a function which returns either top as upper bound
+% or bottom as lower bound depending the specific mode value.
+
+
+% While such dual features have been studied in logic and linguistic.
+% To our best knowledge, there has not been any formalization to exploit
+% the duality among certain features in the context of subtyping in
+% programming languages.
+% We formally study the duality of subtyping in this chapter.
+
+\subsection{Subtyping with union and intersection types}
+\label{sec:overview:1}
+
+To motivate the design of \nameduo relations we first consider a traditional
+subtyping relation with union and intersection types, as well as top
+and bottom types. We choose a system with union and intersection types because
+these features are nowadays common in various OOP languages, including Scala~\citep{odersky2004overview},
+TypeScript~\citep{bierman2014understanding}, Ceylon~\citep{king2013ceylon} or Flow~\citep{chaudhuri2015flow}.
+Therefore union and intersection types are of practical interest. Furthermore union and intersection
+types are simple, intuitive and good for showing duality between concepts. 
+
+The types used for the subtyping relation include the top type $[[Top]]$, the bottom type $[[Bot]]$, integer type
+$[[Int]]$, function type $[[A -> B]]$, intersection type $[[A]] \wedge
+ [[B]]$ and the union type $[[A]] \vee [[B]]$: \\
+
+\begin{center}
+\begin{tabular}{lrcl} \toprule
+  Types & $[[A]], [[B]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid  [[A /\ B]] \mid [[A \/ B]] $ \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+
+
+%---------------------------------------------------------------------------%%
+
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[s]{$ [[A <: B ]] $}{Traditional Subtyping}{top, bot, int, arrow, anda, andb, andc, ora, orb, orc}
+    % \drules[tsp]{}{}{bot}
+  \end{small}
+  \caption{Subtyping for union and intersection types.}
+  \label{fig:traditional_sub}
+\end{figure}
+
+
+%---------------------------------------------------------------------------%%
+
+
+\paragraph{Traditional Subtyping.} A simple subtyping relation accounting for union and intersection types
+is given in Figure~\ref{fig:traditional_sub}. \Rref{s-top} defines that every type is a subtype of $[[Top]]$,
+and \rref{s-bot} states that every type is a supertype of $[[Bot]]$.
+\Rref{s-int} is for integers, and states that $[[Int]]$ is a subtype of itself. \Rref{s-arrow} is the traditional
+subtyping rule for function types. \Rref{s-anda,s-andb,s-andc} are subtyping rules for intersection types.
+\Rref{s-ora,s-orb,s-orc} are subtyping rules for union types.
+The rules that we employ here are quite common for systems with union and intersection types.
+For instance they are the same rules used in various DOT-calculi~\citep{amin2012dependent}
+(which model the essence of Scala). For simplicity we do not account for distributivity rules,
+which also appear in some type systems and calculi~\citep{barendregt1983filter,bessai2015typing,zappa2018julia}.
+
+
+\subsection{Subtyping Specifications using \nameduo}
+\label{sec:overview:2}
+
+In the subtyping relation presented in
+Figure~\ref{fig:traditional_sub}, it is quite obvious that many rules
+look alike. Some rules are essentially a ``mirror image'' of
+other rules. The rules for top and bottom types are an example of
+this. Another example are the \rref{s-andb,s-orb}.
+Although informally humans can easily  observe the similarity between many of the
+rules, this similarity/duality is not expressed directly in the formalism.
+For example, there is nothing preventing us from designing rules that are
+not duals. \nameduo aims at capturing duality in the rules themselves,
+and expressing duality as part of the formalism, 
+rather than just leaving duality informally observable by humans.
+This can prevent, for instance, designing rules for dual concepts
+that do not really dualize. Therefore \nameduo can enforce consistency
+of dual rule designs.
+
+To illustrate how \nameduo rules are designed and relate to the
+traditional subtyping rules, lets refactor the traditional rules
+in a few basic steps. Firstly, lets assume that we have a second
+relation $[[A :> B]]$ that captures the \emph{supertyping}
+between a type $A$ and $B$. Supertyping is nothing but the subtyping
+relation with its arguments flipped. So, the rules of supertyping could
+be simply obtained by taking all the rules in Figure~\ref{fig:traditional_sub}
+and deriving corresponding rules where all the arguments are flipped around.
+We skip that boring definition here. With both supertyping and subtyping,
+the top and bottom rules can be presented as follows:
+
+\begin{center}
+  \begin{tabular}{lll}
+    \drule{s-top} & & \drule{sup-bot}
+  \end{tabular}
+\end{center}
+
+ % \begin{center}
+ % 	 \drule{s-top}
+ %   % \drule{tsp-bot}
+ % \end{center}
+
+\noindent Similarly the rules \rref{s-andb} and \rref{s-orb}, can be presented as:
+
+\begin{center}
+  \begin{tabular}{lll}
+    \drule{s-andb} & & \drule{sup-orb}
+  \end{tabular}
+\end{center}
+
+% \begin{center}
+%  	\drule[]{s-andb}
+%  	% \drule[]{sup-orb}
+% \end{center}
+
+\noindent  This simple refactoring shows that the only difference between dual rules
+is the relation itself, and the (dual) language constructs. Apart from that
+everything else is the same.
+
+\paragraph{\nameduo.}
+With \nameduo we can provide a single unified rule,
+which captures the two distinct subtyping rules, instead.
+The \nameduo relation is parameterized by a mode
+$[[duo]]$:
+
+\begin{center}
+\begin{tabular}{lrcl}
+  Mode & $[[duo]]$  & $\Coloneqq$ & $[[msub]] \ \mid \ [[msup]]$
+\end{tabular}
+\end{center}
+
+\noindent which can be subtyping ($[[msub]]$) or supertyping ($[[msup]]$).
+Thus the \nameduo relation is of the form:
+
+\begin{center}
+	$[[A duo B]]$
+\end{center}
+
+\noindent The mode $[[duo]]$ is a (third) \emph{parameter} of the relation (besides
+$A$ and $B$). With this mode in place, we can readily capture the
+two refactored rules for supertyping of bottom types and subtyping of top types
+as two \nameduo rules. However this still requires us to write two distinct rules.
+To unify those rules into a single one, we introduce a function $\rceil [[duo]] \lceil$ that chooses
+the right bound depending on the mode being used:
+
+\begin{center}
+      $\rceil\![[msub]]\!\lceil \ = \ \top$ \\
+      $\rceil\![[msup]]\!\lceil \ = \ \bot$ \\
+\end{center}
+
+\noindent If the mode is subtyping the upper bound of the relation is the top type, otherwise it is
+the bottom type. With $\rceil [[duo]] \lceil$ we can then write a single unified
+rule that captures the upper bounds of subtyping and supertyping, and which generalizes both
+\rref{s-top} and \rref{sup-bot}:
+
+\begin{center}
+       \drule[]{gds-topbot}
+\end{center}
+
+
+
+\paragraph{The Duality rule.} The \nameduo rule above captures the 2 rules that were refactored
+above. However there are 4 rules in total for top and bottom types (two for subtyping and two for
+supertyping). The two missing rules are:
+
+\begin{center}
+  \begin{tabular}{lll}
+    \drule{s-bot} & & \drule{sup-top}
+  \end{tabular}
+\end{center}
+
+% \begin{center}
+%   \drule{s-bot} \drule{sup-top}
+% \end{center}
+
+\noindent To capture these missing rules, the \nameduo relation includes a special duality rule:
+
+\begin{center}
+  \drule{gds-dual}
+\end{center}
+
+\noindent which simply inverts the mode and flips the arguments of the relation.
+The definition of $[[fduo]]$ is, unsurprisingly:
+
+\begin{center}
+\begin{tabular}{rcl} 
+      & $[[fsub]] \ = \ [[msup]]$ \\
+      & $[[fsup]] \ = \ [[msub]]$ \\
+\end{tabular}
+\end{center}
+
+\noindent With the duality rule
+it is clear that the two missing rules are now derivable from the \nameduo rule for
+bounds and the duality rule. In essence this is the overall idea of the design of \nameduo rules.
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[gds]{$ [[A mode B ]] $}{Declarative \nameduo}{topbot, int, arrow, lleft, rright, both, dual}
+  \end{small}
+  \caption{The \nameduo relation for a calculus with union and intersection types.}
+  \label{fig:subtyping}
+\end{figure}
+
+\paragraph{Complete set of rules.}
+Figure~\ref{fig:subtyping} shows the complete version of declarative \nameduo rules
+for a system with union and intersection types.
+\Rref{gds-topbot} defines the rule bounds (which generalizes the rules for top and bottom types).
+\Rref{gds-int} is a simple rule for integers. $[[Int]]$ is subtype and supertype of $[[Int]]$.
+\Rref{gds-arrow} is an interesting case.
+In the first premise  $[[A]] \ [[fduo]] \ [[B]]$ we invert the mode instead of flipping the arguments
+of the relation, as done in \rref{s-arrow}. One side-effect of this change is that it keeps the
+rule fully \emph{covariant}, which contrasts with subtyping relations where for arrow
+types we need contravariance for subtyping of the inputs. This apparently innocent change has
+important consequences and plays a fundamental role to simplify transitivity proofs as we shall
+see in Section~\ref{sec:overview:5}.
+
+
+
+\Rref{gds-lleft,gds-rright,gds-both} each generalize two rules in the
+traditional formulation of subtyping. \Rref{gds-lleft} generalizes \rref{s-andb,s-orb}.
+\Rref{gds-rright} generalizes \rref{s-andc,s-orc}.  \Rref{gds-both} generalizes \rref{s-anda,s-ora}.
+In the three rules an operation $A\ [[duo]]_? \ B$ is used:
+
+\begin{center}
+\begin{tabular}{rcl}
+      & $[[A]] [[msub]]_? [[B]] \ = \ [[A /\ B]] $ \\
+      & $[[A]] [[msup]]_? [[B]] \ = \ [[A \/ B]] $ \\
+\end{tabular}
+\end{center}
+
+\noindent This operation is used to choose between intersection or union types depending
+on the mode. If the \nameduo mode is subtyping then we get a rule for intersection types,
+otherwise we get a dual rule for union types. 
+
+\paragraph{Uniform and dual rules.}
+In the context of \nameduo it is useful to distinguish between two different
+kinds of rules: uniform rules and dual rules.
+
+
+\emph{Uniform rules} are those that are essentially the same for
+supertyping and subtyping. \Rref{gds-int,gds-arrow} are uniform
+rules.  In those rules the arguments of the relation are exactly the
+same no matter which mode is being used (subtyping or supertyping).
+
+\emph{Dual rules} are those that employ dual constructs, like the
+rules for top and bottom or the rules for union and intersections.
+\Rref{gds-topbot,gds-lleft,gds-rright,gds-both} are dual
+rules. The interesting point in these rules is that they use different (dual)
+constructs depending on the mode. For example, when instantiated with subtyping
+and supertyping, respectively, the \rref{gds-topbot} results in:
+
+\begin{mathpar}
+  \inferrule{ }{A [[msub]] [[Top]]}
+  \and
+  \inferrule{ }{A [[msup]] [[Bot]]}
+\end{mathpar}
+
+\subsection{Implementations using \nameduo}
+\label{sec:overview:3}
+
+\cref{fig:subtyping} showed the declarative \nameduo rules for a calculus
+with union and intersection types. All the rules are syntax directed, except
+for the duality rule (\rref{gds-dual}). This rule flips the mode and arguments to
+generate a formulation using the dual mode: i.e. it flips subtyping to provide
+the equivalent supertyping formulation and vice versa. 
+A benefit of using a formulation with the duality rule is that it
+enables a short specification of \nameduo. Unfortunately the duality rule
+is \emph{not algorithmic}, because the duality rule can always be applied
+indefinitely. In other words naively translating the rules into an program
+would easily result in a non-terminating procedure. 
+Therefore to obtain an algorithmic formulation some additional
+work is needed.
+
+Fortunately, for declarative formulations of \nameduo, there is a simple
+technique that can be used to obtain an algorithmic formulation. A key
+observation is that \nameduo only needs to be flipped (with the duality rule) \emph{at
+  most one time}. Flipping the relation two or more times simply gets
+us back to the starting point. To capture this idea we can use a (boolean)
+flag that keeps track of whether the procedure has already employed the
+duality rule or not.
+
+
+%---------------------------------------------------------------------------%%
+
+
+\begin{figure}
+\begin{small}
+\begin{verbatim}
+data Op = And | Or 
+data Typ = TInt | TArrow Typ Typ | TOp Op Typ Typ | TBot | TTop 
+data Mode = Sub | Sup 
+
+duo :: Bool -> Mode -> Typ -> Typ -> Bool
+duo f m TInt TInt                        = True
+duo f m _ b | b == mode_to_sub m         = True
+duo f m (TArrow a b) (TArrow c d)        = 
+   duo True (flip m) a c && duo True m b d
+duo f m (TOp op a b) c | choose m == op  = duo True m a c || duo True m b c
+duo f m a (TOp op b c) | choose m == op  = duo True m a b && duo True m a c
+duo True m a b                           = duo False (flip m) b a
+duo _ _ _ _                              = False
+\end{verbatim}
+\end{small}
+\caption{Haskell code for implementing an algorithmic formulation of \nameduo rules.}
+\label{fig:codedd}
+\end{figure}
+
+
+%---------------------------------------------------------------------------%%
+
+
+\begin{comment}
+Instead of having 6 rules for union and
+intersection types (like algorithmic \nameduo in \cref{fig:subtyping1}),
+we only need 3 rules in declarative \nameduo.  Similarly, only one rule
+is needed for the bounds in comparison to two for algorithmic
+version.  Furthermore, the code is kept consistent for dual rules.
+With the traditional implementation (that requires two cases for dual
+rules) we cannot guarantee the consistency of the code.
+\end{comment}
+
+To make such an idea concrete, Figure \ref{fig:codedd} shows
+Haskell code that implements a procedure \verb|duo| for determining
+\nameduo for two types. The code is based on the rules in \cref{fig:subtyping}, but
+it uses a boolean flag to prevent the dual rule (the second to
+last case in \verb|duo|) from being applied indefinitely.
+The boolean is true in the initial call or recursive calls to structurally smaller arguments.
+If the algorithm fails for the first five cases
+(which are basically a direct translation of the \rref{gds-topbot,gds-int,gds-arrow,gds-lleft,gds-rright}), then
+the algorithm simply
+flips the boolean flag, mode and arguments to run over a dual
+formulation. This is the second to last line of the
+algorithm.
+
+For example, if the algorithm is called with the mode set to subtyping and
+it is not able to find any matching case with the first 5 rules, then it flips the boolean
+flag to \verb|False|, subtyping to supertyping and the arguments to check the
+equivalent supertyping formulation.  If again it fails to find a matching rule,
+\verb|False| will be returned and the algorithm will
+terminate.  This illustrates that it is enough to flip the boolean
+flag once to exploit \nameduo. In all our Coq
+formulations of \nameduo we have developed an alternative
+algorithmic formulation of \nameduo which uses an extra boolean flag and is shown
+to be sound and complete to the declarative formulations with the duality rule.
+In short there is an easy, general and provably \emph{sound} and
+\emph{complete} way to implement algorithms based on the idea of
+\nameduo, while at the same time retaining the benefits
+of reuse of the logic for rules for dual constructs.
+
+
+\subsection{Discovering new features}
+\label{sec:overview:4}
+
+\noindent \nameduo can provide interesting extra features essentially for free. 
+For example,
+the hallmark feature of the well-known $F_{<:}$ calculus 
+(a polymorphic calculus with subtyping)~\citep{canning1989f} is \emph{bounded quantification},
+which is a feature used in most modern OOP languages (such as Scala or Java). 
+In $F_{<:}$, bounded quantification allows type variables to be defined with \emph{upper bounds}.
+For example, the following Scala program illustrates the use of such upper bounds:
+
+\begin{lstlisting}[language=Scala]
+class Person {
+  def name: String = "person"
+}
+
+class Student extends Person {
+  override def name: String = "student"
+  def id: String = "id"
+}
+
+class StudentsCollection[S <: Student](obj: S) {
+  def student: S = obj
+}
+\end{lstlisting}
+
+\noindent The Scala program shown above uses the upper bounds for the class \emph{StudentsCollection} written as \underline{S <: Student}.
+This upper bound restricts \emph{StudentsCollection} to be
+instantiated 
+with \emph{Student} and its subtypes. Since the upper bound is \emph{Student},
+any class that is supertype of \emph{Student} like \emph{Person}
+cannot be instantiated in \emph{StudentsCollection}.
+
+\noindent However \emph{lower bounds} are also useful, and indeed the Scala language allows them
+(though Java does not).  One example of a program with lower bounds in Scala is:
+
+\begin{lstlisting}[language=Scala]
+class GraduateStudent extends  Student {
+  def degree: String = "graduate degree"
+}
+
+class ResearchStudent extends GraduateStudent {
+  override def degree: String = "research degree"
+}
+
+class CollectionExcludingResearchStudents[S >: GraduateStudent](obj: S) {
+  def student: S = obj
+}
+\end{lstlisting}
+
+\noindent In contrast to the upper bounds, the
+Scala program shown above uses the lower bounds for the class
+\emph{CollectionExcludingResearchStudents} written as \underline{S >: GraduateStudent}.
+This lower bound restricts \emph{CollectionExcludingResearchStudents} to be instantiated with \emph{GraduateStudent} and its supertypes.
+Since the lower bound is \emph{GraduateStudent}.
+Any class that is a subtype of \emph{GraduateStudent} (such as \emph{ResearchStudent})
+cannot be instantiated in \emph{CollectionExcludingResearchStudents}.
+But any supertype of \emph{GraduateStudent} like \emph{Student} and \emph{Person} (including \emph{GraduateStudent}) can be instantiated in
+\emph{CollectionExcludingResearchStudents}.
+
+One can think of universal quantification
+with lower bounds as a dual to universal quantification with upper bounds. While
+there is no extension of $F_{<:}$
+that we know of that presents universal quantification with lower
+bounds in the literature, applying a \nameduo design to $F_{<:}$ gives
+us, naturally, the two features at once (lower and upper bounded quantification).
+
+%The subtyping rule of traditional system kernel $F_{<:}$ is good enough to handle
+%subtypin.  To achieve the functionality of both subtyping and
+%supertyping in a traditional system it is needed to add four separate
+%rules.  Two rules are required for subtyping and two for supertyping.
+
+\paragraph{Bounded quantification in $F_{<:}$.}
+The traditional subtyping rule of System kernel $F_{<:}$
+with upper bounded quantification is:
+
+\begin{center}
+  \drule{s-forallkfs}
+\end{center}
+
+\noindent In the premise of this rule, we add the type variable $[[a]]$ to the
+context with an upper bound $[[A]]$. If under the extended context
+the bodies of the universal quantifier ($[[B]]$ and $[[C]]$) are in a 
+subtyping relation then the universal quantifiers are also in a
+subtyping relation. 
+
+\begin{comment}
+To handle supertyping along with subtyping in traditional subtyping systems, it
+is needed to add three more rules.  The reason to add three more rules
+is to capture the relation between type variable and the types
+independently. Let us illustrate this by adding supertyping relation
+in the type variable and by keeping subtyping between the types:
+\end{comment}
+To add lower bounded quantification the obvious idea is to add a
+second rule:
+
+\begin{center}
+  \drule{s-forallkfsb}
+\end{center}
+
+\noindent However this alone is not quite right because the
+environment is also extended with a lower bound ($X >: A$), which does 
+not exist in $F_{<:}$ contexts. Therefore some additional care is also 
+needed for the variable cases of $F_{<:}$ extended with lower bounded 
+quantification. When an upper bounded constraint is found in the
+environment, the variable case needs to deal with the upper bound 
+appropriately. Since there are two rules dealing with the variable 
+case in $F_{<:}$, one possible approach is to add two more rules 
+for dealing with upper bounds:
+
+\begin{center}
+  \begin{tabular}{lll}
+    \drule{s-TVarb} & & \drule{s-ReflTvar}
+  \end{tabular}
+\end{center}
+
+% \begin{center}
+%   \drule{ts-TVarb} \drule{ts-ReflTvar}
+% \end{center}
+
+\noindent However such a design feels a little unsatisfactory. 
+We need a total of 6 rules to fully deal with lower and upper 
+bounded quantification (instead of 3 rules in $F_{<:}$). 
+At the same time the rules are nearly 
+identical, differing only on the kind of bounds that is used. 
+Furthermore the metatheory of $F_{<:}$ also needs to be significantly 
+changed. In particular \emph{narrowing} has 
+to be adapted to account for the lower bounds and \emph{transitivity}
+has to be extended with several new cases. Since both
+\emph{narrowing} and \emph{transitivity} proofs for $F_{<:}$ are
+non-trivial, this extension is also non-trivial and adds further complexity 
+to already complex proofs.
+
+\paragraph{A variant of Kernel $F_{<:}$ with \nameduo.}
+We now reconsider the design of Kernel $F_{<:}$ from scratch employing the
+\nameduo methodology. In the subtyping rule for universal quantification,
+it is important to note that the subtyping relation between two 
+universal quantifiers in the conclusion is the same as the relation between types
+$[[B]]$ and $[[C]]$ in premise. Similarly, the (subtyping/supertyping) 
+bounds of type variable
+$[[a]]$ in the conclusion are the same as the bounds of type variable $[[a]]$
+in premise. In a design with \nameduo, we would like to generalize the
+two uses of subtyping. Therefore, we can design a single unified rule 
+with the help of two modes:
+
+\begin{center}
+  \drule{gs-forallkfs}
+\end{center}
+ 
+\noindent \cref{sec:system-dkfs:1} explains the \nameduo rules of our \nameduo kernel $F_{<:}$ variant
+with union and intersection types \gfskiu in detail.
+\Rref{gs-forallkfs} is the interesting case, capturing both upper and lower bounded quantification in an elegant way.
+This rule states that if in a well-formed context, type variable $[[a]]$ has a 
+$[[mode1]]$ relation with type $[[A]]$ and if type $[[B]]$ has
+$[[mode2]]$ relation with type $[[C]]$, then the universal quantification with body $[[B]]$ has a $[[mode2]]$
+relation with the universal quantification with body $[[C]]$. 
+Correspondingly there are also two \nameduo rules for variables:
+
+\begin{center}
+  \begin{tabular}{lll}
+    \drule{gs-TVara} & & \drule{gs-ReflTvar}
+  \end{tabular}
+\end{center}
+
+% \begin{center}
+%   \drule{gs-TVara} \drule{gs-ReflTvar} 
+% \end{center}
+
+\noindent In short, the design of a variant of $F_{<:}$ with \nameduo
+leads to a system that naturally accounts for both upper and lower 
+bounded quantification. Moreover, the metatheory, and in particular 
+the proofs of \emph{narrowing} and \emph{transitivity} are not more 
+complex than the corresponding original $F_{<:}$ proofs. In fact the
+proof of transitivity is significantly simpler, because \nameduo enables 
+novel proof techniques as we discuss next.
+
+
+\subsection{New proof techniques}
+\label{sec:overview:5}
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[gs]{$ [[A mode B ]] $}{Algorithmic \nameduo}{topbtma,topbtmb,int,arrow}
+  \end{small}
+  \caption{The \nameduo relation for simply typed lambda calculus calculus.}
+  \label{fig:subtyping1}
+\end{figure}
+
+\noindent Transitivity proofs are usually a challenge for systems with
+subtyping. This is partly because subtyping relations often need to
+deal with some \emph{contravariance}. For instance, the
+\rref{s-arrow} (in Figure~\ref{fig:traditional_sub}) is contravariant on the input
+types. Such contravariance causes problems in certain proofs,
+including transitivity. To illustrate the issue more concretely,
+let's distill the essence of the problem by considering a
+simple lambda calculus with subtyping called \stlc, where the types are:
+
+
+\begin{center}
+\begin{tabular}{lrcl} \toprule
+  Types & $[[A]], [[B]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Int]] \mid [[A -> B]] $ \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\noindent and the subtyping rules for those types are just the
+relevant subset of the rules in Figure~\ref{fig:traditional_sub}.
+The transitivity proof for this simple calculus is: 
+
+\begin{lemma}[\stlc Transitivity]
+\label{stlc:trasn1}
+   If $[[A]] [[msub]] [[B]]$ and $[[B]] [[msub]] [[C]]$ then $[[A]] [[msub]] [[C]]$.
+\end{lemma}
+ 
+\begin{proof}
+By induction on type $[[B]]$. 
+\begin{itemize}
+  \item{Case $[[Top]]$ and case $[[Int]]$ are trivial to prove by destructing the hypothesis in context.}
+  \item{Case $[[B_1 -> B_2]]$ requires inversion of the two hypotheses to discover that $[[A]]$ can only be
+        a function type, while $[[C]]$ is either a function type or $[[Top]]$.}
+\end{itemize}
+\end{proof}
+
+\noindent In the arrow case, we need to invert both hypotheses to discover more information about $[[A]]$ and $[[C]]$.
+%This is because the arrow types are contravariant to their input type and covariant to their output type.
+For this very simply language this double inversion is not too problematic, but as the language
+of types grows and the subtyping relation becomes more complicated, such inversions become
+significantly harder to deal with.
+
+At this point one may wonder if the transitivity proof could be done
+using a different inductive argument to start with, and thus avoid the
+double inversions.  After all there are various other possible
+choices. Perhaps the most obvious choice is to try induction on the
+subtyping relation itself ($A <: B$), rather than on type $B$. However
+this does not work because of the contravariance for arrow types, which
+renders one of induction hypothesis in the arrow case useless
+(and thus do not allow the case to be proved). Other alternative choices
+for an inductive argument (such as type $A$ or $C$) do not work for similar
+reasons.
+
+\paragraph{Developing metatheory with \nameduo.} In order to develop metatheory
+with \nameduo it is convenient to use an equivalent formulation of \nameduo that
+eliminates the duality rule (which is non-algorithmic and makes inversions more difficult).
+For \gstlc, which
+is a \nameduo version of \stlc, this would lead to the set of rules in Figure~\ref{fig:subtyping1}.
+This alternative algorithmic version eliminates the duality rule.
+\Rref{gs-topbtma,gs-int,gs-arrow} are similar to the rules we discussed in \cref{sec:overview:2}.
+\Rref{gs-topbtmb} is the dual rule of \rref{gs-topbtma}. With
+\Rref{gs-topbtmb}, the duality rule is unnecessary.
+
+\paragraph{Transitivity with \nameduo.} Now we turn our attention to the proof of transitivity:
+
+\begin{lemma}[\gstlc Transitivity]
+\label{gstlc:trans1}
+   If $[[A]] [[duo]] [[B]]$ and $[[B]] [[duo]] [[C]]$ then $[[A]] [[duo]] [[C]]$.
+\end{lemma}
+ 
+\begin{proof}
+By induction on $[[A]] [[duo]] [[B]]$. 
+\begin{itemize}
+  \item{All cases are trivial to prove by destructing $[[duo]]$ and inversion of the second hypothesis ($[[B]] [[duo]] [[C]]$).}
+\end{itemize}
+\end{proof}
+
+Transitivity of systems with \nameduo can often be proved by induction
+on the subtyping relation itself. This has the nice advantage that all the cases
+essentially become trivial to prove (for \gstlc) and only a single inversion is needed for arrow types.
+A key reason why such approach
+works in the formulation with \nameduo is that we can keep case for arrow types covariant.
+Instead we only flip the mode. Another important observation is that when
+we prove a transitivity lemma with \nameduo we are, in fact, proving two lemmas
+simultaneously: one lemma for transitivity of subtyping, and another one for transitivity
+of supertyping. When we use the induction hypothesis we have access to both lemmas
+(by choosing the appropriate mode).
+
+The proof of the transitivity lemma by induction on the 
+\nameduo relation can scale up to more complex subtyping/\nameduo relations. This includes 
+subtyping relations with advanced features such as 
+intersection types, union types, parametric polymorphism and bounded quantification.
+All of these 
+can follow the same strategy (induction on the \nameduo relation) to
+simplify the transitivity proof, as we shall see in Section~\ref{sec:exploration}.
+
+
+
+%---------------------------------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Section 3 from paper
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\section{The \ui calculus}
+\label{sec:algorithm}
+
+In Section~\ref{sec:overview} we gave an overview and discussed advantages of using the \nameduo relation.
+In this section we introduce a lambda calculus with union and intersection types that is based
+on \nameduo. We aim at showing that developing calculi and metatheory using \nameduo is
+simple, requiring only a few small adaptations compared with more traditional formulations
+based on subtyping. Our main aim is to show type soundness (subject-reduction and preservation)
+for \ui.
+
+\subsection{Syntax and \nameduo}
+\label{sec:algorithm:1}
+
+\paragraph{Syntax.}
+\cref{fig:subtyping2} shows the syntax of the calculus. The types for \ui were already introduced
+in Section~\ref{sec:overview}. Terms include all the constructs for the lambda calculus
+(variables $[[x]]$, functions $[[\x : A . e]]$ and applications $[[e1 e2]]$) and integers ($[[i]]$).
+Values are a subset of terms, consisting of abstractions and integers only.
+The mode $[[mode]]$ is used to choose the mode of the relation:
+it can be either subtyping ($[[msub]]$) or supertyping ($[[msup]]$).
+Typing contexts $\Gamma$ are standard and used to track the types
+of the variables in a program. Finally, a well-formedness relation $[[G |- ok]]$ ensures
+that typing contexts are well-formed.
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \begin{tabular}{lrcl} \toprule
+      Types & $[[A]], [[B]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[A /\ B]] \mid [[A \/ B]] $ \\
+      Terms & $[[e]]$ & $\Coloneqq$ & $ [[x]]  \mid [[i]]  \mid [[\x : A . e]] \mid [[e1 e2]] $ \\
+      Values & v & $\Coloneqq$ & $  [[i]] \mid [[\x : A . e]] $ \\
+      Context & $[[G]]$ & $\Coloneqq$ & $ \cdot  \mid [[G]] , [[x : A]] $ \\
+      Mode & $[[mode]]$  & $\Coloneqq$ & $[[<:]] \ \mid \ [[:>]]$ \\
+      \bottomrule
+    \end{tabular}
+  \end{small}\\
+  \begin{small}
+    \centering
+    \drules[gs]{$ [[A mode B ]] $}{Algorithmic \nameduo}{topbtma,topbtmb,int,arrow,lefta,leftb,righta,rightb,botha,bothb}
+  \end{small}
+  \caption{Syntax and \nameduo relation for union and intersection types.}
+  \label{fig:subtyping2}
+\end{figure}
+
+
+%---------------------------------------------------------------------------%%
+
+
+\paragraph{\nameduo for \ui.}
+The \nameduo rules for \ui were already partly presented in
+Figure~\ref{fig:subtyping}. In addition to the rules in the 
+\gstlc, we also need extra rules for union and intersection
+types. These extra rules are presented in Figure~\ref{fig:subtyping2}.
+%Algorithmic rules for \ui include all the rules from Figure~\ref{fig:subtyping1} and Figure~\ref{fig:subtyping2}.
+%Rules in Figure~\ref{fig:subtyping1} are already explained in~\cref{sec:overview:5}.
+\Rref{gs-lefta,gs-righta,gs-botha} are also similar to the \rref{gds-lleft,gds-rright,gds-both} presented in Figure~\ref{fig:subtyping}.
+Since we eliminate the \emph{duality rule} in the algorithmic version, we add dual subtyping rules.
+\Rref{gs-leftb,gs-rightb,gs-bothb} are the dual versions of \rref{gs-lefta,gs-righta,gs-botha} respectively.
+This formulation is shown to be sound and
+complete with respect to the formulation with the duality rule in Figure~\ref{fig:subtyping}.
+As explained in Section~\ref{sec:overview} this variant of the rules makes
+some proofs easier, thus we employ it here. The \nameduo relation
+is reflexive and transitive:
+
+\begin{restatable}[Reflexivity]{theorem}{refl}
+  $[[A]] [[duo]] [[A]]$.
+\end{restatable}
+
+\begin{proof}
+By induction on type A. Reflexivity is trivial to prove by applying subtyping rules.
+\end{proof}
+
+\begin{restatable}[Transitivity]{theorem}{trans1}
+  If $[[A]] [[duo]] [[B]]$ and $[[B]] [[duo]] [[C]]$ then $[[A]] [[duo]] [[C]]$.
+\end{restatable}
+
+\begin{proof}
+By induction on subtyping relation. 
+\begin{itemize}
+	\item{Cases \rref{gs-topbtma}, \rref{gs-int}, \rref{gs-lefta}, \rref{gs-righta} and \rref{gs-botha} are trivial to prove.}
+	\item{Case  \rref{gs-topbtmb} requires an additional \cref{lemma:invbound}.}
+	\item{Case \rref{gs-arrow} requires induction on hypothesis and subtyping rules.}
+	\item{Cases \rref{gs-leftb} and \rref{gs-rightb} requires an additional \cref{lemma:ddboth-inv} to be applied on hypothesis in context.}
+	\item{Case \rref{gs-bothb} requires induction on the hypothesis. This case also requires \rref{gs-leftb}, \rref{gs-rightb}, and \rref{gs-botha} subtyping rules.}
+\end{itemize}
+\end{proof}
+
+We used the following auxiliary lemmas to prove transitivity.
+
+\begin{lemma}[Bound Selection]
+  \label{lemma:invbound}
+	If \ $\rceil [[duo]] \lceil [[duo]] B$  then $[[A]] [[duo]] [[B]]$.
+\end{lemma}
+
+This lemma captures the upper and lower bounds with respect to relation between two types.
+If the mode is subtyping, then it states that any type that is supertype of $[[Top]]$ is supertype of all the other types.
+If the mode is supertyping, then it states that any type that is subtype of $[[Bot]]$ is subtype of all the other types.
+In essence the lemma generalizes the following two lemmas (defined directly over subtyping and supertyping):
+
+\begin{itemize}
+	\item{If $[[Top]]$ $[[msub]]$ $[[B]]$ then $[[A]]$ $[[msub]]$ $[[B]]$}
+	\item{If $[[Bot]]$ $[[msup]]$ $[[B]]$ then $[[A]]$ $[[msup]]$ $[[B]]$}
+\end{itemize}
+
+\begin{lemma}[Inversion for rule GDS-Both]
+  \label{lemma:ddboth-inv}
+  If $[[C]]$ $[[duo]]$ ($[[chooseType A  B]]$) then ($[[C]]$ $[[duo]]$ $[[A]]$) and  ($[[C]]$ $[[duo]]$ $[[B]]$).
+\end{lemma}
+
+This lemma captures the relation between types with respect to the duality of union and intersection types.
+It is the general form of two lemmas:
+
+\begin{lemma}[Inversion for Union types]
+  \label{lemma:union:inv}
+ If ($[[A \/  B]]$) $[[msub]]$ C then ($[[A]]$ $[[msub]]$ $[[C]]$) and  ($[[B]]$ $[[msub]]$ $[[C]]$).
+\end{lemma}
+
+\begin{lemma}[Inversion for Intersection types]
+  \label{lemma:inter:inv}
+  If $[[C]]$ $[[msub]]$ ($[[A /\  B]]$) then ($[[C]]$ $[[msub]]$ $[[A]]$) and  ($[[C]]$ $[[msub]]$ $[[B]]$).
+\end{lemma}
+
+
+\noindent Finally there is also a \emph{duality lemma}, which complements reflexivity and transitivity:
+
+\begin{lemma}[Duality]
+  \label{lemma:sym2}
+   $[[A]] [[duo]] [[B]]$ = $[[B]] [[fduo]] [[A]]$.
+\end{lemma}
+
+This lemma captures the essence of duality,
+and enables us to switch the mode of the relation by flipping the arguments as well.
+Furthermore, the duality lemma plays a crucial role when proving soundness and
+completeness with respect to the declarative version of \nameduo, which has duality
+as an axiom instead.
+All of these lemmas are used in later proofs for type soundness.
+
+
+\subsection{Semantics and type soundness}
+\label{sec:algorithm:2}
+
+
+%---------------------------------------------------------------------------%%
+
+
+\begin{figure}[t]
+   \begin{small}
+    \centering
+    \drules[typ]{$ [[G |- e : A ]] $}{Typing}{var,int,abs,app,sub}
+   \end{small}
+   
+   \begin{small}
+    \centering
+    \drules[step]{$ [[e1 --> e2 ]] $}{Reduction}{appl,appr,dbeta}
+  \end{small}
+  \caption{Typing and reduction for \ui.}
+  \label{fig:typing}
+\end{figure}
+
+
+%---------------------------------------------------------------------------%%
+
+
+\paragraph{Typing.}
+The first part of \cref{fig:typing} presents the typing rules of \ui.
+The rules are standard. Note that \rref{g-sub} is the subsumption
+rule: if an expression $[[e]]$ has type $[[B]]$ and $[[B]]$ is a subtype of $[[A]]$
+then $[[e]]$ has type $[[A]]$. Noteworthy, $[[B <: A]]$ is the \nameduo
+relation being used with the subtyping mode. 
+
+\paragraph{Reduction.}
+At the bottom of \cref{fig:typing} we show the reduction rules of
+\ui.  Again, the reduction rules are standard.  \Rref{step-dbeta} is
+the usual beta-reduction rule, which substitutes a value $[[v]]$ for
+$x$ in the lambda body $[[e]]$.  \Rref{step-appl} and \rref{step-appr}
+are the standard call-by-value rules for applications.
+
+
+\paragraph{Type soundness.}
+The proof for type soundness relies on the usual preservation and progress lemmas:
+
+\begin{lemma}[Type Preservation]
+  If \ $[[G |- e : A ]]$ and $[[e --> e' ]]$ then: $[[G |- e' : A ]]$.
+\end{lemma}
+
+\begin{proof}
+  By induction on the typing relation and with the help of \cref{lemma:sym2}.
+\end{proof}
+
+\begin{lemma}[Progress]
+  If \ $[[G |- e : A ]]$ then:
+ \begin{enumerate}
+  \item either $[[e]]$ is a value.
+  \item or $[[e]]$ can take a step to $[[e']]$.
+  \end{enumerate}
+\end{lemma}
+
+\begin{proof}
+  By induction on the typing relation.
+  
+%  \begin{itemize}
+%     \item{Case variable is trivial to solve.}
+%      \item{Case abstraction requires an auxiliary lemma.}
+%      \item{Case application requires an auxiliary lemma.}
+%      \item{Case subsumption is trivial to solve.}
+%  \end{itemize}
+ 
+\end{proof}
+
+\subsection{Summary and Comparison}
+\label{sec:algorithm:3}
+
+Besides \ui, which employs the \nameduo relation, we have also formalized
+a lambda calculus with union and intersection types using the traditional
+subtyping relation (\stlciu). Most of the metatheory is similar with a great deal
+of theorems being almost the same. The main differences are in the
+metatheory for subtyping which has to be generalized.
+For example both reflexivity and transitivity have to be generalized to
+operate in the \nameduo relation instead. The formalization
+with \nameduo only has two additional lemmas (the duality lemma and the bound selection lemma), which have
+no counterparts with subtyping. The number of lines of code for the formalization of \stlciu is 596 whereas for \gstlciu is 630.
+The total number of lemmas required for \stlciu are 23 and 25 for \gstlciu.
+Following two lemmas in \stlciu are captured as one lemma in \gstlciu (\cref{lemma:ddboth-inv}):
+
+\paragraph{Inversion for Union Types.}
+This lemma is stated as \cref{lemma:union:inv:again}:
+it is the inversion of the subtyping rule for the union types in the traditional subtyping relation.
+The lemma states that if the union of two types $[[A]]$ and $[[B]]$ is the subtype of a type $[[C]]$, then both types $[[A]]$ and $[[B]]$ are subtypes of type $[[C]]$.
+
+\begin{lemma}[Inversion for Union types]
+  \label{lemma:union:inv:again}
+ If ($[[A \/  B]]$) $[[msub]]$ C then ($[[A]]$ $[[msub]]$ $[[C]]$) and  ($[[B]]$ $[[msub]]$ $[[C]]$).
+\end{lemma}
+
+\paragraph{Inversion for Intersection Types.}
+This lemma, which corresponds to \cref{lemma:inter:inv:again},
+is the inversion of the subtyping rule for the intersection types with
+the traditional subtyping relation.
+It states that if a type $[[C]]$ is the subtype of the intersection of two
+types $[[A]]$ and $[[B]]$, then the type $[[C]]$ is a subtype of both types $[[A]]$ and $[[B]]$.
+
+\begin{lemma}[Inversion for Intersection types]
+  \label{lemma:inter:inv:again}
+  If $[[C]]$ $[[msub]]$ ($[[A /\  B]]$) then ($[[C]]$ $[[msub]]$ $[[A]]$) and  ($[[C]]$ $[[msub]]$ $[[B]]$).
+\end{lemma}
+
+
+
+%---------------------------------------------------------------------------%%
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Section 4 from paper
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+\section{The \gfskiu calculus}
+\label{sec:system-dkfs}
+
+In Section ~\ref{sec:algorithm} we introduced a simple calculus with
+union and intersection types using \nameduo.  This section extends that
+calculus with bounded quantification based on kernel $F_{<:}$. This
+new variant also employs \nameduo and is called \gfskiu.  The main
+aim of this section is to show that sometimes we can get interesting
+and novel dual features come for free.  In addition to upper bounded
+quantification of $F_{<:}$, System \gfskiu provides lower bounded
+quantification as well.  Additionally, we also show the type
+soundness of \gfskiu.
+
+\subsection{Syntax and \nameduo}
+\label{sec:system-dkfs:1}
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \begin{tabular}{lrcl} \toprule
+      Types & $[[A]], [[B]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid  [[A /\ B]] \mid [[A \/ B]] \mid [[a]] \mid [[forall a A B]] $ \\
+      Terms & $[[e]]$ & $\Coloneqq$ & $ [[x]]  \mid [[i]]  \mid [[\x : A . e]] \mid [[e1 e2]] \mid [[/\ a mode A . e]] \mid [[e A]] $ \\
+      Values & v & $\Coloneqq$ & $ [[i]]  \mid [[\x : A . e]] \mid [[/\ a mode A . e]] $ \\
+      Context & $[[G]]$ & $\Coloneqq$ & $ \cdot  \mid [[G]] , [[x : A]] \mid [[ G , a mode A]] $ \\
+      Mode & $[[mode]]$  & $\Coloneqq$ & $[[msub]] \ \mid \ [[msup]]$ \\
+      \bottomrule
+    \end{tabular}
+  \end{small} \\
+  \begin{small}
+    \centering
+    \drules[gs]{$ [[G |- A mode B ]] $}{\gfskiu \nameduo}{topbtmap,topbtmbp,intp,arrowp,leftap,leftb,rightap,rightbp,bothap,bothbp,ReflTvara,TVara,TVarb,forallkfs}
+  \end{small}
+  \caption{Syntax and additional rules for \nameduo in \gfskiu.}
+  \label{fig:subtyping:dkfs}
+\end{figure}
+
+\paragraph{Syntax.}
+%\baber{Show all rules in this section.}
+\cref{fig:subtyping:dkfs} shows the syntax of the calculus \gfskiu.
+Types $[[Top]]$, $[[Bot]]$, $[[Int]]$, $[[A -> B]]$, $[[A /\ B]]$, $[[A \/ B]]$ are already introduced in~\cref{sec:overview}.
+Type variable $[[a]]$ and a universal quantifier on type variables
+$[[forall a A B]]$ are the two additional types in \gfskiu.
+Terms $[[x]]$, $[[i]]$, $[[\x : A . e]]$, $[[e1 e2]]$ are already discussed in~\cref{sec:algorithm:1}.
+Type abstraction $[[/\ a mode A . e]]$ and type application $[[e A]]$ are two additional terms in \gfskiu.
+Values are a subset of terms, consisting of term abstraction, type abstraction and integers.
+
+\paragraph{\nameduo for \gfskiu.}
+\nameduo rules for a calculus with union and intersection types are
+presented in \cref{fig:subtyping1}.  \gfskiu has two significant
+differences in its \nameduo rules in comparison to \cref{fig:subtyping1},
+which are presented in Figure~\ref{fig:subtyping:dkfs}.
+The first one is the addition of a typing context in the \nameduo rules. This is 
+important to ensure that type variables are bound.
+Thus, \nameduo for
+\gfskiu is now of the form $[[G |- A mode B ]]$. The second
+difference is that there are four
+more rules, three of them (\rref{gs-ReflTvara,gs-TVara,gs-forallkfs}) were already 
+explained in \cref{sec:overview:4}. \Rref{gs-TVarb} is the dual of \rref{gs-TVara}. We introduce this rule to eliminate the \emph{duality rule}.
+
+The \nameduo relation for \gfskiu is reflexive and transitive as well:
+
+\begin{restatable}[Reflexivity]{theorem}{reflkfs}
+  \label{lemma:refl:kfs}
+  $[[G]] [[|-]] [[A]] [[mode]] [[A]]$.
+\end{restatable}
+
+\begin{proof}
+By induction on type A. 
+\end{proof}
+
+\begin{restatable}[Transitivity]{theorem}{transkfs}
+  \label{lemma:trans:kfs}
+  If $[[G]] [[|-]] [[A]] [[mode]] [[B]]$ and $[[G]] [[|-]] [[B]] [[mode]] [[C]]$ then $[[G]] [[|-]] [[A]] [[mode]] [[C]]$.
+\end{restatable}
+
+\begin{proof}
+By induction on $[[G]] [[|-]] [[A]] [[mode]] [[B]]$. 
+\begin{itemize}
+  \item{Cases \rref{gs-topbtma}, \rref{gs-topbtmb}, \rref{gs-int}, \rref{gs-ReflTvar}, \rref{gs-TVara}, \rref{gs-lefta}, \rref{gs-righta}, \rref{gs-botha} are trivial to prove.}
+  \item{Case \rref{gs-arrow} is proved using the induction hypotheses.}
+  \item{Case \rref{gs-TVarb} can be proved using \cref{lemma:sym2:dkfs}.}
+  \item{Case \rref{gs-forallkfs} is proved using the induction hypotheses.}
+  \item{Case \rref{gs-leftb} can be proved using an additional \cref{lemma:ddboth-inv::dkfs}.}
+  \item{Case \rref{gs-rightb} also uses \cref{lemma:ddboth-inv::dkfs}.}
+  \item{Case \rref{gs-bothb} is proved using the induction hypotheses.}
+\end{itemize}
+\end{proof}
+
+The auxiliary lemmas for transitivity are described next and are
+essentially the same as in~\cref{sec:algorithm:1}.
+
+\begin{lemma}[Bound Selection]
+  \label{lemma:invbound:dkfs}
+  If \ $[[G]] [[|-]] \rceil [[mode]] \lceil [[mode]] B$  then $[[G]] [[|-]] [[A]] [[mode]] [[B]]$.
+\end{lemma}
+
+\begin{lemma}[Inversion for rule GDS-Both]
+  \label{lemma:ddboth-inv::dkfs}
+  If $ [[G]] [[|-]] [[C]]$ $[[mode]]$ ($[[chooseType A  B]]$) then $[[G]] [[|-]]$ ($[[C]]$ $[[mode]]$ $[[A]]$) and  ($[[C]]$ $[[mode]]$ $[[B]]$).
+\end{lemma}
+
+\noindent There is also a \emph{duality lemma}:
+
+\begin{lemma}[Duality]
+  \label{lemma:sym2:dkfs}
+   % $[[G]] [[|-]] [[A]] [[mode]] [[B]]$ = $[[G]] [[|-]] [[B]] [[fduo]] [[A]]$.
+   $[[G |- A mode B]]$ = $[[G |- B fduo A]]$.
+\end{lemma}
+
+Finally, We also proved weakening and the
+narrowing lemmas for \nameduo calculus.
+Here we briefly compare the narrowing lemma for \fskiu and
+\gfskiu: 
+
+\begin{lemma}[\fskiu Narrowing Lemma]
+If $[[G |- A msub B]]$ and $[[G]] , [[a]] [[msub]] [[B]], [[G]]_1
+[[|-]] C [[msub]] D$ then $[[G]] , [[a]] [[msub]] [[A]], [[G]]_1 [[|-]] C [[msub]] D$
+ \label{lemma:narrow:fsk}
+\end{lemma}
+
+\begin{lemma}[\gfskiu Narrowing Lemma]
+If \ $[[G |- A mode1 B]]$ and $[[G]] , [[X]]  [[mode1]]
+[[B]], [[G]]_1 [[|-]] C [[mode2]] D$ then $[[G]] , [[X]] [[mode1]] [[A]], [[G]]_1 [[|-]] C [[mode2]] D$
+ \label{lemma:narrow:dfsk}
+\end{lemma}
+
+\noindent \cref{lemma:narrow:fsk} exploits only the subtyping relation
+while \cref{lemma:narrow:dfsk} exploits our \nameduo relation.
+\cref{lemma:narrow:dfsk} illustrates how lower and upper bounds are
+captured under a unified mode relation in narrowing.  Like the
+transitivity statement using a \nameduo formulation, one can think of the
+\nameduo narrowing lemma as actually two distinct lemmas: one for
+narrowing of upper bounds and another for narrowing of lower bounds.
+Also, it is important to note that \cref{lemma:narrow:dfsk} is using
+two modes $[[mode1]]$ and $[[mode2]]$. $[[mode1]]$ is the relation
+between types $A$, $B$ and the type variable $[[X]]$. Whereas, $[[mode2]]$ is the relation
+between type $C$ and type $D$.
+Those two relations do not need to be the same.
+
+\subsection{Semantics and type soundness}
+\label{sec:system-dfsub:2}
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[g]{$ [[G |- e : A ]] $}{Typing}{var, int, abs, app,subs,tabs,tapp}
+  \end{small}
+
+  \begin{small}
+    \centering
+    \drules[gred]{$ [[e1 --> e2 ]] $}{Reduction}{AppAbs,Fun,Arg,TAppTAbs,TFun}
+  \end{small}
+
+  \caption{Typing and reduction of the duotyped kernel $F_{<:}$.}
+  \label{fig:typing:dkfs}
+\end{figure}
+
+\paragraph{Typing.}
+The first part of \cref{fig:typing:dkfs} presents the typing rules of \gfskiu.
+The first five rules are standard and are already explained in~\cref{sec:overview:1}.
+\Rref{g-tabs,g-tapp} are the two additional rules in \gfskiu. 
+\Rref{g-tabs} is similar to the standard rule for type abstractions in $F_{<:}$
+except that it generalizes the subtyping bound to a $[[mode]]$ bound, which could
+either be subtyping or supertyping.
+\Rref{g-app} again differs from the rule for type applications in $F_{<:}$
+by using a $[[mode]]$ bound instead of just a subtyping bound.
+These two rules rules are noteworthy because they also illustrate an advantage
+of using \nameduo in the typing relation. Without \nameduo we would need multiple
+typing rules to capture different variations of the bounds.
+
+\paragraph{Reduction.}
+\label{sec:red:kfs}
+The last part of \cref{fig:typing:dkfs} presents the reduction rules
+of our calculus.  Again, reduction rules are standard except for the
+\rref{gred-TAppTAbs}.  In \rref{gred-TAppTAbs} the duality relation
+captures both upper and the lower bounds.  \Rref{gred-TFun} is
+the standard reduction rule for the type applications.
+
+\paragraph{Type Soundness.}
+\label{sec:sound:kfs}
+We proved the type soundness for our calculus.
+All the proofs are formalized in Coq theorem prover.
+
+\begin{lemma}[Type Preservation]
+ If \ $[[G |- e : A ]]$ and $[[e --> e' ]]$ then: $[[G |- e' : A ]]$.
+\end{lemma}
+
+\begin{proof}
+ By induction on the typing relation.
+\begin{itemize}
+  \item{Case \rref{g-var,g-int,g-abs,g-tabs,g-subs} are trivial to solve.}
+  \item{Case \rref{g-app} uses \cref{lemma:refl:kfs} and \cref{lemma:sym2:dkfs}.}
+  \item{Case \rref{g-tapp} uses \cref{lemma:refl:kfs}.}
+\end{itemize}
+\end{proof}
+
+\begin{lemma}[Progress]
+ If \ $[[G |- e : A ]]$ then:
+ \begin{enumerate}
+  \item either $[[e]]$ is value.
+  \item or $[[e]]$ can take step to $[[e']]$.
+  \end{enumerate}
+\end{lemma}
+
+\begin{proof}
+  By induction on the typing relation.
+  \begin{itemize}
+      \item{Case \rref{g-var,g-int,g-abs,g-tabs,g-subs} are trivial to solve.}
+      \item{Case \rref{g-app} requires canonical forms.}
+      \item{Case \rref{g-tapp} requires canonical forms.}
+  \end{itemize}
+\end{proof}
+
+
+\subsection{Summary and Comparison}
+\label{sec:system-dfsub:3}
+Besides \gfskiu , which employs the \nameduo relation, we have also formalized
+a calculus \fskiu: an extension of kernel $F_{<:}$ (only with
+upper bounded quantification) with union and intersection types using the traditional
+subtyping relation. The essential differences are similar to 
+what we already discussed in~\cref{sec:algorithm:3}. The formalization
+with \nameduo only has two additional lemmas (the duality lemma and the bound selection lemma), besides a few
+minor auxiliary lemmas. 
+The number of lines for proof for the formalization of \fskiu is 1648 whereas for \gfskiu is 1770.
+The total lemmas required for \fskiu are 74 and 81 for
+\gfskiu. 
+
+\noindent We emphasize that one significant difference between
+\fskiu and \gfskiu is the additional lower bounded
+quantification provided by \gfskiu. This is an extra feature
+which comes essentially for free with \nameduo.
+
+
+%---------------------------------------------------------------------------%%
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Section 5 from paper
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+\section{A Case Study on \nameduo}
+\label{sec:exploration}
+
+In this section we present an empirical case study, which we conducted
+to validate some of the benefits of \nameduo. Overall, the results of our case
+study indicate that: \nameduo does allow for compact specifications; the
+complexity of developing formalization with \nameduo is comparable to similar
+developments using traditional subtyping relations; transitivity proofs
+are often significantly simpler; and \nameduo is a generally applicable technique.
+
+\subsection{Case Study}
+
+We formalized a number of different calculi using \nameduo.
+All the proofs and metatheory are mechanically checked 
+by the Coq theorem prover. We also formalized a few traditional subtyping systems for comparison.
+\cref{tab:desc:allsystems} shows a brief overview of various systems that we formalized.
+\stlc, \stlciu, \fsk, \fskiu and \fs are the traditional subtyping systems.
+The Coq formalizations for the traditional subtyping systems are based on existing
+Coq formalizations from the locally nameless representation with cofinite quantification
+tutorial and repository (\url{https://www.chargueraud.org/softs/ln/}) by Chargu\'eraud~\citep{chargueraud-11-ln}.
+The formalizations of \gstlc, \gstlciu, \gfsk, \gfskiu and \gf are their respective \nameduo
+formulations, and modify the original ones with traditional subtyping. 
+Subscript $<:$ represents a calculus with traditional subtyping whereas
+$[[mode]]$ represents a calculus with \nameduo.
+Superscript $\wedge$$\vee$ is the notation for a system with intersection and union types.
+Subscript $k$ corresponds to the kernel version of a variant of $F_{<:}$,
+while subscript $F$ corresponds to the corresponding full version.
+We also formalized a simple polymorphic system without bounded quantification using \nameduo.
+We have two \nameduo variants for this polymorphic type system without bounded
+quantification. One without union and intersection types (\gfp)
+and another with union and intersection types (\gfpiu).
+
+
+\begin{table}[!h]
+  \begin{center}
+     \begin{tabular}{ |p{1cm}|p{5cm}|p{1cm}|p{5cm}|  }
+       \hline
+      \textbf{Name} & \textbf{Description} & \textbf{SLOC} & \textbf{Transitivity} \\
+       \hline
+      \stlc & STLC with subtyping & 537 & By induction on the middle type. \\
+       \hline % <-- Midrule here
+      \gstlc & STLC with \nameduo & 583 & By induction on the \nameduo relation. \\
+       \hline % <-- Midrule here
+      \stlciu & STLC with subtyping, union types and intersection types & 595 & By induction on the middle type. \\
+       \hline % <-- Midrule here
+      \gstlciu & STLC with \nameduo, union types and intersection types & 623 & By induction on the \nameduo relation. \\
+       \hline % <-- Midrule here
+      \gfp & Simple polymorphic system with \nameduo and without bounded quantification & 1466 & By induction on the \nameduo relation. \\
+       \hline % <-- Midrule here
+      %$[[fsiu]]$ & System $F_{<:}$ with union types and intersection types & 1630 & By induction on subtyping relation and with additional lemmas \\
+       %\hline % <-- Midrule here
+      \gfpiu & Simple polymorphic system with \nameduo, union types and intersection types and without bounded quantification  & 1546 & By induction on the \nameduo relation. \\
+       \hline % <-- Midrule here
+      \fsk & System $F_{<:}$ kernel & 1542 & By induction on the (well-formed) middle type. \\
+       \hline % <-- Midrule here
+      \gfsk & System $F_{<:}$ kernel with \nameduo & 1579 & By induction on the \nameduo relation. \\
+       \hline % <-- Midrule here
+      \fskiu & System $F_{<:}$ kernel with subtyping, union types and intersection types & 1648 & By induction on the (well-formed) middle type. \\
+       \hline % <-- Midrule here
+      \gfskiu & System $F_{<:}$ kernel with \nameduo, union types and intersection types & 1770 & By induction on the \nameduo relation.\\
+       \hline % <-- Midrule here
+      \fs & System full $F_{<:}$ & 1518 & By induction on the (well-formed) middle type.\\
+       \hline % <-- Midrule here
+      \gf & System full $F_{<:}$ with \nameduo & 1786 & By induction on the (well-formed) middle type.\\
+      \hline
+    \end{tabular}
+    \caption{Description of all systems.}
+    \label{tab:desc:allsystems}
+  \end{center}
+\end{table}
+
+
+In \cref{tab:desc:allsystems}, the last column (Transitivity) summarizes the
+proof technique used in each system to prove transitivity.
+Recall the transitivity lemma (using the \nameduo formulation):
+
+\begin{restatable}[Transitivity]{theorem}{trans}
+  If $[[A]] [[mode]] [[B]]$ and $[[B]] [[mode]] [[C]]$ then $[[A]] [[mode]] [[C]]$.
+\end{restatable}
+
+\noindent Induction on the middle type means induction on type $[[B]]$ (or well-formed type $[[B]]$ for polymorphic systems),
+whereas induction on the \nameduo relation means induction on $[[A]] [[mode]] [[B]]$.
+
+\paragraph{Research Questions.}
+\cref{sec:intro:duo} discussed benefits of using \nameduo.
+This section attempts to quantify some of these benefits. More concretely,
+we answer the following questions in this section:
+\begin{itemize}
+  \item{Does \nameduo provide shorter specifications?}
+  \item{Does \nameduo increase the complexity of the formalization and metatheory of the language?}
+  \item{Does \nameduo make transitivity proofs simpler?}
+        \item{Is \nameduo a generally applicable technique?}
+\end{itemize}
+
+\noindent We follow an empirical approach to answer these questions and address each question in a separate (sub)section.
+Obviously a precise measure for complexity/simplicity is hard to obtain.
+We use SLOC for the formalization and proofs as an approximation.
+All the formalizations are written in the same Coq style to ensure
+that the comparisons are fair.
+ 
+
+\subsection{Does \nameduo provide shorter specifications?}
+
+\begin{table}
+  \begin{center}
+  { \renewcommand{\arraystretch}{1}
+     \begin{tabular}{ |p{0.8cm}|p{11cm}|  }
+       \hline
+      \textbf{Name} & \textbf{\nameduo Rules} \\
+       \hline
+      \gstlc & \drules[gds]{$ [[A mode B ]] $}{\gstlc \nameduo}{topbot, int, arrow, dual}  \\ [-2em]
+      \hline % <-- Midrule here
+      \gstlciu & \drules[gds]{$ [[A mode B ]] $}{\gstlciu \nameduo plus all rules from \gstlc}{lleft, rright, both} \\ [-2em]
+      \hline % <-- Midrule here
+      \gfp & \drules[gds]{$ [[A mode B ]] $}{\gfp \nameduo plus all rules from \gstlc}{ReflTvarp, forallfsp}  \\ [-2em]
+      \hline % <-- Midrule here
+      \gfpiu & \drules[gds]{$ [[A mode B ]] $}{\gfpiu \nameduo plus all rules from \gstlc, \gstlciu and \gfp}{}  \\ [-3em]
+      \hline % <-- Midrule here
+      \gfsk & \drules[gds]{$ [[G |- A mode B ]] $}{\gfsk \nameduo plus all rules from \gstlc}{ReflTvar, TVar, forallkfs} \\ [-2em]
+      \hline % <-- Midrule here
+      \gfskiu & \drules[gds]{$ [[G |- A mode B ]] $}{\gfskiu \nameduo plus all rules from \gstlc, \gstlciu and \gfsk}{}  \\ [-3em]
+      \hline % <-- Midrule here
+      \gf & \drules[gds]{$ [[G |- A mode B ]] $}{\gf \nameduo plus all rules from \gfsk excluding \rref{gs-forallkfs} and union/intersection rules}{forallffs}  \\
+      \hline
+    \end{tabular} }
+    \caption{Declarative \nameduo rules of all systems.}
+    \label{tab:subrules:allsystems}
+  \end{center}
+\end{table}
+
+\begin{table}
+     \begin{tabular}{ |p{1cm}|p{2cm}|p{1cm}|p{2cm}|p{5cm}| }
+       \hline
+      \textbf{System} & \textbf{Subtyping rules count} & \textbf{System} & \textbf{\nameduo rules count}  & \textbf{\nameduo extra features}  \\
+       \hline
+      \stlc & 3 (+1) & \gstlc & 4 & lower bounds in \gstlc \\
+       \hline % <-- Midrule here
+      \stlciu & 9  (+1) & \gstlciu & 7 & lower bounds in \gstlciu  \\
+       \hline % <-- Midrule here
+      \fsk & 5 (+4) & \gfsk & 7 & lower bounds and lower bounded quantification in \gfsk \\
+       \hline % <-- Midrule here
+      \fskiu & 11 (+4)& \gfskiu & 10 & lower bounds and lower bounded quantification in \gfskiu \\
+      \hline
+    \end{tabular}
+    \caption{Comparing the features and number of rules with subtyping and \nameduo.}
+    \label{tab:rules:allsystems}
+\end{table}
+
+This section answers our first question. In short our case study seems
+to support this conclusion.
+The declarative \nameduo rules of all the systems that we formalized are shown in
+\cref{tab:subrules:allsystems}. Please note that the formulation also contains
+the \emph{duality rule}. \gstlc has the basic set of \nameduo rules.
+These rules are common in all of the systems. \gstlciu has the subtyping rules for intersection types and union types in addition to the rules from \gstlc.
+\gfp contains two more rules (\rref{gds-ReflTvarp,gds-forallfsp}) in addition to the rules from \gstlc.
+\gfpiu has all the rules from \gstlc, \gstlciu and \gfp.
+\gfsk has three additional subtyping \rref{gds-ReflTvar,gds-TVar,gds-forallkfs} in addition to the rules from \gstlc.
+\gfskiu has all the rules from \gstlc, \gstlciu, and \gfsk. \gf has an additional subtyping \rref{gds-forallffs}.
+
+
+
+\paragraph{Comparison with systems using traditional subtyping.}
+\cref{tab:rules:allsystems} shows the number of rules and features
+for different calculi formulated with subtyping and \nameduo.
+In our formulation, \stlc has 3 types \emph{$[[Top]]$, $[[Int]]$,
+  and $[[A -> B]]$}. This requires 3 subtyping rules to capture the
+subtyping relation of these 3 types. If we wanted to support
+the $[[Bot]]$ type in \stlc we would
+need to add 1 more subtyping rule. In the table we express the extra rules required
+for extra features as (+n), where $n$ is the number of extra rules.
+\nameduo supports $[[Bot]]$ for free
+by exploiting the dual nature of $[[Top]]$ with the help of
+\emph{duality rule}. 
+Systems with more rules follow the same approach for
+traditional systems i.e more types require more subtyping rules.  If
+we wanted to support the $[[Bot]]$
+type in \stlciu we also need 1 additional rule.
+To further
+extend our discussion to the polymorphic systems with bounded
+quantification, we would need 4 additional rules in \fsk (1 for
+$[[Bot]]$ type and 3 for lower bounded quantification).
+Similarly we would need 4 additional rules to support lower bounds and lower bounded
+quantification in \fskiu.
+
+In summary, in the systems that we compared \nameduo has a similar number of rules
+to systems with subtyping, but it comes with extra features. If we wanted
+to add those features to systems with traditional subtyping, then that would
+generally result in more rules for the traditional versions compared to \nameduo. This would
+also have an impact in the SLOC of the metatheory, increasing the metatheory
+for those systems considerably.
+
+
+
+\subsection{Does \nameduo increase the complexity of the formalization and metatheory of the language?}
+
+At first, one may think that \nameduo increases the complexity of
+formalization and metatheory of the language, since it provides
+interesting extra features and generalizations normally come at a cost.
+Interestingly, \nameduo does not add significant extra complexity in
+the formalization and metatheory of the language.
+\cref{tab:sloc:allsystems} shows the SLOC
+for formalizations using traditional subtyping and \nameduo systems.  The lines of code
+for \stlciu are 595 and the lines of code for \gstlciu are
+623.  Similarly, the lines of code for \fskiu are 1648 and 1770
+for \gfskiu.  Although SLOC for \nameduo systems are slightly more
+than traditional subtyping systems, the \nameduo
+systems come with extra features. Nevertheless the mechanization
+effort is roughly the same for version with and without \nameduo.
+Also, as illustrated in Sections~\ref{sec:algorithm} and
+\ref{sec:system-dkfs}, the vast majority of the lemmas/metatheory
+for calculi with \nameduo
+are similar to traditional systems with subtyping.
+
+\begin{table}
+  \begin{center}
+     \begin{tabular}{ |p{2cm}|p{2cm}|p{2cm}|p{2cm}| }
+       \hline
+      \textbf{Subtyping System} & \textbf{SLOC} & \textbf{\nameduo System} & \textbf{SLOC}  \\
+       \hline
+      \stlc & 537 & \gstlc & 583 \\
+       \hline % <-- Midrule here
+      \stlciu & 595  & \gstlciu & 623  \\
+       \hline % <-- Midrule here
+      \fsk & 1542 & \gfsk & 1579 \\
+       \hline % <-- Midrule here
+      \fskiu & 1648 & \gfskiu & 1770 \\
+      \hline
+    \end{tabular}
+    \caption{SLOC of traditional subtyping and \nameduo systems.}
+    \label{tab:sloc:allsystems}
+  \end{center}
+\end{table}
+
+\subsection{Does \nameduo make transitivity proofs simpler?}
+
+Transitivity is often the most difficult property to prove
+in the metatheory of a language with subtyping.
+\cref{tab:desc:allsystems} highlights a brief comparison between the
+techniques for the transitivity proof of various systems.
+Transitivity of systems with \nameduo is generally proved by induction on
+the \nameduo relation. One exception is \gf where induction
+on the \nameduo does not work.  As discussed in
+\cref{sec:overview:5} \nameduo allows us to simplify the transitivity
+proof by using a different inductive argument.
+
+\cref{tab:sloc:trans} shows the SLOC for transitivity proofs of various
+systems.  The SLOC for \stlc transitivity proof are 7 and
+the SLOC for \gstlc transitivity proof are 4.  Similarly,
+the SLOC for \fskiu transitivity proof are 38 and 18 for
+the transitivity proof of \gfskiu. This evaluation shows that
+\nameduo always allows us to reduce the size of the transitivity proof.
+Again, it is important to
+note that \nameduo also provides extra features of lower bound and lower
+bounded quantification.  Despite these additional features in \nameduo
+systems, their transitivity proofs are shorter than the traditional
+systems with subtyping.
+
+However we could not employ this proof technique in our \nameduo version
+of full $F_{<:}$ (\gf). The problem is related to \emph{narrowing}, which
+in \gf is closely coupled with \emph{transitivity}. Despite that we could
+still apply the technique to most systems with \nameduo, and even for \gf we can
+still prove transitivity using the same technique as in the traditional $F_{<:}$
+(i.e. using the middle type as the inductive argument).
+
+\begin{table}
+  \begin{center}
+     \begin{tabular}{ |p{2cm}|p{2cm}|p{2cm}|p{2cm}| }
+       \hline
+      \textbf{Subtyping System} & \textbf{Transitivity SLOC} & \textbf{\nameduo System} & \textbf{Transitivity SLOC}  \\
+       \hline
+      \stlc & 7 & \gstlc & 4 \\
+       \hline % <-- Midrule here
+      \stlciu & 13  & \gstlciu & 11  \\
+       \hline % <-- Midrule here
+      \fsk & 26 & \gfsk & 13 \\
+       \hline % <-- Midrule here
+      \fskiu & 38 & \gfskiu & 18 \\
+      \hline
+    \end{tabular}
+    \caption{SLOC for transitivity proofs.}
+    \label{tab:sloc:trans}
+  \end{center}
+\end{table}
+
+\subsection{Is \nameduo a generally applicable technique?}
+Our case studies indicate that \nameduo is a generally applicable technique. In all the systems that we have tried to use \nameduo, we have managed to
+successfully apply it. Furthermore we believe that \nameduo can be essentially applied to any system with a traditional subtyping relation. The most complex system where
+we have employed \nameduo is \gf. In \gf universal quantification
+allows \nameduo between the bounds, generalizing the universal quantification presented
+in Section~\ref{sec:system-dkfs}.
+\Rref{gds-forallffs} in \gf employs two operations $|[[mode1]]|_{[[mode2]]}$ and $[[A]]~\widetilde{[[mode]]}~[[B]]$:
+\begin{center}
+    \begin{tabular}{rcl} 
+      $|[[mode1]]|_{[[mode2]]}$  & \\
+      & $|\![[msub]]\!|_{[[mode2]]} \ = \ [[fduo]]_2$ \\
+      & $|\![[msup]]\!|_{[[mode2]]} \ = \ [[mode2]]$ \\
+
+      $ [[A]]~\widetilde{[[mode]]}~[[B]] $  & \\
+      & $[[A]]~\widetilde{[[msub]]}~[[B]] = \ [[B]]$ \\
+      & $[[A]]~\widetilde{[[msup]]}~[[B]] = \ [[A]]$ \\
+    \end{tabular}
+\end{center}
+$|[[mode1]]|_{[[mode2]]}$ takes two modes $[[mode1]]$ and $[[mode2]]$ as input, and flips $[[mode2]]$ if $[[mode1]]$ is subtyping, otherwise
+it returns $[[mode2]]$. This operation chooses the mode to check the relationship
+between the bounds of the two universal quantifiers being compared for \nameduo.
+The second operation $[[A]]~\widetilde{[[mode]]}~[[B]]$ selects the bounds to use in the environment when checking the \nameduo of the bodies of the universal quantifiers.
+It takes a mode $[[mode]]$ and two types $[[A]]$ $[[B]]$ as inputs,
+and returns the second type if the mode is subtyping,
+otherwise it returns the first type.
+
+
+%---------------------------------------------------------------------------%%
+
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../Thesis"
+%%% org-ref-default-bibliography: "../Thesis.bib"
+%%% End:

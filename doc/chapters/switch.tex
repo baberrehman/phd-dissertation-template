@@ -1,0 +1,2807 @@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Union Types with Disjoint Switches}
+\label{chap:switch}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%%%% Overview %%%%%%%%%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{Overview}\label{subsec:key}
+
+In this chapter we first introduce a simplified formulation of union calculus (\name), which
+formalizes the basic ideas of union types with disjoint switches similar
+to those in the Ceylon language.  To our best knowledge, there is yet
+no formalism of disjoint switches, and \name studies those features
+formally and precisely. In particular, \name captures the key idea
+for type-directed elimination of union types in its switch construct
+in a language independent way, and formally defines disjointness,
+disjointness and subtyping algorithms, and the operational semantics.
+The simplified formulation of \name is useful to compare with
+existing calculi with union types in the literature
+\citep{macqueen1984ideal,barbanera1995intersection,dunfield2003type,dunfield2014elaborating,pierce1991programming,castagna2005gentle}.
+Moreover,
+we study a more fully featured formulation of \name that includes practical
+extensions, such as intersection types, distributive subtyping, nullable types and a simple
+form of nominal types. \name is proved to enjoy many desirable properties, such as type
+soundness, determinism and the soundness/completeness of disjointness and subtyping
+definitions.  All the Ceylon examples in Sections~\ref{sec:ceylon} and
+\ref{sec:nullable} can be encoded in \name. Finally, we discuss \name with
+disjoint polymorphism and a more general subtyping rule for bottom type.
+
+The typing rules guarantee that cases in the switch are disjoint and exhaustive.
+Reduction preserves types and produces deterministic results.
+% Since the semantics
+% is type-dependent it uses and propagates type annotations at runtime,
+% with the help of annotated values.
+We start with an overview of our design and discuss some challenges
+we met for the calculi designed.
+
+%\end{comment}
+
+\paragraph*{Disjointness.}
+A central concept in the formulation of disjoint switches is disjointness.
+Our first hurdle was to come up with a suitable formal definition of disjointness.
+Consider the simple \name switch expression:
+\begin{lstlisting}[language=Scala]
+  switch x {
+    (y : String | Int)  -> 0
+    (y : Int | Bool)    -> 1
+  }
+\end{lstlisting}
+
+Here we wish to determine whether \lstinline{$[[String \/ Int]]$}
+and \lstinline{$[[Int \/ Bool]]$}
+are disjoint or not. In other words, we wish to determine whether, for any possible
+(dynamic) type that $[[x]]$ can have, it is unambiguous which branch to choose.
+In this case, it turns out that there is ambiguity. For instance, if $[[x]]$ is an integer,
+then either branch can be chosen. Thus \name rejects this program with a disjointness error.
+In this example, the reason to reject the program is basically that
+\lstinline{$[[Int <: String \/ Int]]$} and \lstinline{$[[Int <: Int \/ Bool]]$}.
+That is we can find a common subtype (\lstinline{$[[Int]]$}) of the
+types in both branches. Moreover, that subtype can be inhabited by values (integer values
+in this case). If the only common subtypes of the types in the two branches
+would be types like $[[Bot]]$ (which has no inhabitants), then the switch should
+be safe because we would not be able to find a value for $[[x]]$ that would trigger
+two branches.
+%Now it should be clear what the relationship with disjointness for intersection
+%types is. For the switch construct the dual notion -- two types are disjoint if the only
+%common subtypes are bottom-like types -- seems to be helpful.
+This observation
+leads to the notion of disjointness employed in the first variant of \name in Section~\ref{sec:union}.
+Formally, we have:
+
+\begin{definition}[$[[Bot]]$-Disjointness]
+  \label{def:disjointness}
+  A $*$ B $\Coloneqq$ $\forall$ C, if $[[C <: A]]$ and $[[C <: B]]$ then $[[botlike C]]$
+\end{definition}
+
+Here we use $[[botlike C]]$ to denote that type $[[C]]$ is equivalent to
+type $[[Bot]]$, or, bottom-like (i.e. $[[C <: Bot]]$).
+In either definition, $[[Int]]$ serves as a counter-example for $[[String\/Int]]$
+and $[[Int\/Bool]]$ to be disjoint. Thus \name rejects the program above with
+a disjointness error. It is worth noting that this first notion of
+disjointness is essentially dual to a definition of disjointness for intersection
+types in the literature in terms of top-like common supertypes~\citep{oliveira2016disjoint}.
+
+\paragraph*{Disjointness for Intersections in the Literature.}
+This is very similar to the related idea of disjointness for intersection
+types~\citep{oliveira2016disjoint}. In that setting two types are disjoint
+if the only common supertypes that two types can have are top-like types (i.e.
+types such as $[[Top]]$ or $[[Top /\ Top]]$).  While a disjoint switch
+provides deterministic behavior for downcasting, disjointness in
+intersection types prevents ambiguity in upcasting. In a type-safe
+setting, if two values $[[v1]]$ and $[[v2]]$ (of type $[[A1]]$ and
+$[[A2]]$) can both be upcasted to type $[[B]]$, then $[[B]]$ must be a common
+supertype of $[[A1]]$ and $[[A2]]$.  The disjointness restriction of
+$[[A1]]$ and $[[A2]]$ means they cannot have any meaningful common
+supertype, so when the two values together get upcast to a type like
+$[[Int]]$, only one of them can contribute to the result.
+Prior work on disjoint intersection types is also helpful
+to find an algorithmic formulation of disjointness: essentially we can find an algorithmic
+formulation that employs dual rules to those for disjoint intersection types.
+In essence, disjointness definition for disjoint intersection types
+~\citep{oliveira2016disjoint} is dual to ours and is stated as:
+
+\begin{definition}[Disjointness in disjoint intersection types]
+  \label{def:dijoin:intersection:types}
+  A $*$ B $\Coloneqq$ $\forall$ C, if $[[A <: C]]$ and $[[B <: C]]$ then $[[toplike C]]$
+\end{definition}
+
+\noindent where $[[toplike C]]$ represents the top-like types: types that are supertype and subtype of top.
+
+
+\begin{comment}
+%Since we were not aware of previous definitions of disjointness
+%for subtyping relations with union types,
+For this, we looked at the related idea of disjointness for intersection
+types~\citep{oliveira2016disjoint}. In that setting two types are disjoint
+if the only common supertypes that they can have are top-like types (i.e.
+types such as $[[Top]]$ or $[[Top /\ Top]]$). While this notion of
+disjointness is not what we want for union types, it seems closely related
+to what is needed. Consider the simple \name switch expression:
+
+\begin{lstlisting}[language=Scala]
+  switch x {
+    (y : String | Int)  -> 0
+    (y : Int | Bool)    -> 1
+  }
+\end{lstlisting}
+
+\noindent Here we wish to determine whether \lstinline{$[[String \/ Int]]$}
+and \lstinline{$[[Int \/ Bool]]$}
+are disjoint or not. In other words, we wish to determine whether, for any possible
+(dynamic) type that $[[x]]$ can have, it is unambiguous which branch to choose.
+In this case, it turns out that there is ambiguity. For instance, if $[[x]]$ is an integer,
+then either branch can be chosen. Thus \name rejects this program with a disjointness error.
+In this example, the reason to reject the program is basically that
+\lstinline{$[[Int <: String \/ Int]]$} and \lstinline{$[[Int <: Int \/ Bool]]$}.
+That is we can find a common subtype (\lstinline{$[[Int]]$}) of the
+types in both branches. Moreover, that subtype can be inhabited by values (integer values
+in this case). If the only common subtypes of the types in the two branches
+would be types like $[[Bot]]$ (which has no inhabitants), then the switch should
+be safe because we would not be able to find a value for $[[x]]$ that would trigger
+two branches. Now it should be clear what the relationship with disjointness for intersection
+types is. For the switch construct the dual notion -- two types are disjoint if the only
+common subtypes are bottom-like types -- seems to be helpful.
+Indeed the notion of disjointness employed in the first variant \name in Section~\ref{sec:union}
+is exactly this. Formally, we have:
+
+\begin{definition}\label{def:disjointness}
+  A $*_s$ B $\Coloneqq$ $\forall$ C, $[[C <: A]]$ and $[[C <: B]]$ $\Longrightarrow$ $[[botlike C]]$
+\end{definition}
+
+\noindent Here the notation $[[A]] *_s [[B]]$ denotes that types $[[A]]$ and $[[B]]$ are disjoint,
+and $[[botlike C]]$ means that type $[[C]]$ is bottom-like (i.e. $[[C <: Bot]]$).
+\end{comment}
+
+\paragraph*{Disjointness in the presence of union and intersection types.}
+The variant of \name in Section~\ref{sec:union} does not include intersection types.
+Unfortunately, the disjointness definition above does not work in the presence of
+intersection types. The reason is simple: with intersection types we can always find
+common subtypes, such as \lstinline{$[[Int /\ Bool]]$}, which are not bottom-like, and yet
+they have no inhabitants. That is,
+\lstinline{$[[Int /\ Bool]]$} is not a subtype of $[[Bot]]$, but no value can have both type
+\lstinline{$[[Int]]$} and type \lstinline{$[[Bool]]$}.
+In other words, when intersection types are added, empty types
+and bottom-like types no longer coincide.
+We address this issue by reformulating
+disjointness in terms of \textit{ordinary types}~\citep{davies2000intersection}, 
+which are basically primitive types
+(such as integers or functions).
+Importantly, ordinary types are always inhabited.
+If we can find common \emph{ordinary} subtypes between two types, we
+know that they are not disjoint. Thus the disjointness definition
+used for formulations of \name with intersection types is:
+
+\begin{definition}[$[[/\]]$-Disjointness]
+  \label{def:over:disj}
+  A $*$ B $\Coloneqq$ $\nexists$ $[[Cord]]$, $[[Cord <: A]]$ and $[[Cord <: B]]$.
+\end{definition}
+
+\noindent Note that here $[[Cord]]$ is a metavariable denoting ordinary types.
+Under this definition we can check that $[[Int]]$ and $[[Bool]]$ are disjoint,
+since no ordinary type is a subtype of both of these two types. This definition avoids
+the issue with Definition \ref{def:disjointness}, which would not consider these two types disjoint.
+Moreover, this definition is a generalization of the previous one, and in the
+variant with union types only the two definitions coincide.
+
+This new definition requires a different approach to algorithmic disjointness. Our new
+approach is to use the notion of \emph{lowest ordinary subtypes}:
+For any given type, we calculate a finite set to represent all the possible
+values that can match the type.
+%% Since the lowest ordinary subtypes of any type is a finite set,
+Then we can easily determine whether two types are disjoint
+by ensuring that the intersection of their lowest ordinary subtypes is empty.
+
+\begin{comment}
+Two types are disjoint if and only if all of their common subtypes are bottom-like.
+That is to say, there does not exist any term that is assignable to both of
+them. Specially, a bottom-like type is disjoint to any types, while the top type
+is only disjoint to bottom-like types.
+For the detailed discussion and an algorithmic formalization of
+disjointness, please refer to Section~\ref{sec:union:disj}.
+\end{comment}
+
+\begin{comment}
+In literature, there exist a very different definition of disjointness
+in calculi with intersection types that also serves for disambiguity
+purpose~\cite{oliveira2016disjoint}.
+In contrary to subtypes, it restricts the common supertype, or the lowest
+upper bound, of two disjoint types to be \emph{top-like}.
+Similarly, a top-like type is equivalent to type top, which is the greatest
+upper bound of all types.
+The difference comes from the subtyping rules for intersections.
+Any component of an intersection type is a supertype of it.
+If two intersection types share a part, e.g. $[[Int/\Char]]$ and $[[String/\Int]]$
+both contains $[[Int]]$, they cannot pass the disjointness checking.
+Moreover, assuming $[[Odd]]$ and $[[Even]]$ denote odd numbers and even numbers,
+they are both subtype of $[[Int]]$, and therefore are not disjoint.
+The application of this definition is dual to our definition:
+given a type that is not top-like, consider a scenario where we are looking for
+a term that is assignable to the type. If all candidates' types are disjoint,
+at most one term can be chosen from them.
+\begin{verbatim}
+ (\x. x+1 : Int->Int) (1 ,, True) --> (1+1):Int
+\end{verbatim}
+\end{comment}
+
+\begin{comment}
+We alter the definition of disjointness (see Section~\ref{sec:inter:disj})
+in our second calculus, which extends \name by intersection types.
+Any two types $[[A]]$ $[[B]]$ have a trivial subtype $[[A/\B]]$.
+Generally such an intersection type is not bottom-like.
+A new representation for types with no inhabited values is then needed.
+At the end, we come up with a concept that is more like the opposite to it:
+we use \emph{ordinary} to denote types that have corresponding values.
+%
+If two types have a common subtype that is ordinary, any inhabited
+value of the ordinary type is assignable to them.
+Thurs, any ordinary types cannot be a subtype of two disjoint types at
+the same time.
+%
+Literal types are ordinary, like $[[Int]]$.
+All function types are viewed as ordinary for simplification.
+Compound types like intersection or union types are not included in ordinary
+types because they must have subtype that is a literal type if they have
+inhabited values.
+%
+Then we can prove $[[Int/\String\/Bool]]$ is disjoint with $[[Int/\String\/Char]]$.
+Although they have subtype $[[Int/\String]]$, it is not ordinary.
+And $[[Int\/String]]$ is not disjoint with $[[Bool\/String]]$, because of the
+subtype $[[String]]$.
+Especially, types corresponding to no values, like $[[Int/\String]]$, are
+disjoint with any types.
+
+We cannot enumerate all subtypes of two types to check disjointness.
+Instead we have an algorithmic definition of disjointness (Figure~\ref{fig:union:disj-typ}) for \name.
+These rules structurally examine two given types, decomposing unions
+and comparing their literal components.
+For example, $[[Int\/String]]$ is disjoint to $[[Char]]$ because both types
+in it is disjoint to $[[Char]]$.
+%
+However, this approach cannot be directly employed to the intersection
+extension.
+Like we said above, some intersection is disjoint to other types
+because itself is uninhabited.
+So even neither $[[Int]]$ or $[[String]]$ is disjoint with $[[Int\/String]]$,
+together $[[Int/\String]]$ is disjoint with it.
+Alternatively, for a given type, we use a set of ordinary types to denote
+all possible values of it. For instance, \verb"{Int,Char}" represent the
+union type $[[Int\/Char]]$.
+The set is calculated by function \lstinline{LOS} (\emph{lowest ordinary
+subtypes})in Section~\ref{}.
+To check whether two types are disjoint, we calculate the intersection
+of their sets and see if it is empty.
+From another angle, we normalize and simplify types by \lstinline{LOS},
+and then are able to directly detect uninhabited ones.
+
+The set representation is justified by the distributivity in subtyping (Figure~\ref{}).
+Every type in the set denotes a component in a union type.
+That is to say, any inhabited type must have an equivalent union type,
+except for literal types.
+Only with distributivity, we have $[[(A\/B)/\C]]$ equivalent to
+$[[(A/\C)\/(B/\C)]]$.
+The soundness and completeness of the algorithmic definition is proved
+with respect to the declarative definition.
+Same applies to the two definitions for \name without intersection.
+\end{comment}
+
+
+\paragraph*{Typing and exhaustiveness}
+In \name, a switch expression has two branches. For multiple cases,
+one can write nested switch expression.
+We assume the two branches expect $[[A]]$ and $[[B]]$.
+To make sure they exhaust all possible types of the switched term $[[e]]$,
+there is a premise that $[[e]]$ can be checked by the type $[[A\/B]]$.
+% \verb|<=| stands for checking mode in bidirectional typing,
+% on contrary to inference mode.
+In other words, the dynamic type of $[[e]]$ should be a subtype of $[[A\/B]]$,
+like $[[Int]]$ to $[[Int\/Char]]$.
+%
+\begin{mathpar}
+  \ottdruletypXXswitch{}
+\end{mathpar}
+%
+Another premise requires the two cases to be disjoint.
+Besides, the two branches are typed under different assumption of the bound
+variable. Although the same type $[[C]]$ is used for both of them in the rule,
+it does not prevent them to return different types.
+Assuming the type of $[[e1]]$ is $[[C1]]$ and the type of
+$[[e2]]$ is $[[C2]]$, we can make $[[C]]$ to be $[[C1\/C2]]$.
+
+\begin{comment}
+\paragraph*{The role of types in the dynamic semantics.}
+\baber{Dynamic type terminology to be updated here.}
+Another interesting aspect of \name is the dynamic semantics,
+in which reduction of switch expression is guided by dynamic type.
+The dynamic type is the more precise type that an expression can have at runtime.
+Dynamic types are used by the switch construct
+to select the correct branch to execute.
+For instance, if we use the following switch expression:
+
+\begin{lstlisting}[language=Scala]
+switch (val) {
+    (x : Int)     -> x*2,
+    (y : String)  -> y
+}
+\end{lstlisting}
+
+\noindent Then if \lstinline{val} is the value \lstinline{1},
+the dynamic type is \lstinline{Int}. Therefore, based on the dynamic type,
+the first case is picked.
+\end{comment}
+
+\paragraph*{Distributive Subtyping.}
+In Section~\ref{sec:inter}, we study \name with an enriched distributive
+subtyping relation inspired by Ceylon programming language.
+Distributive subtyping is more expressive than standard subtyping
+and adds significant complexity in the system, in particular
+for a formulation of algorithmic subtyping and the completeness proof
+of the disjointness algorithm.
+Nevertheless, distributive subtyping does not affect the disjointness
+definition and its algorithm remains the same with and without
+distributive subtyping.  The following code snippet elaborates on the
+expressiveness of distributive subtyping:
+
+\begin{lstlisting}[language=Scala]
+  void do (<Integer & String> | Boolean val) { /* do something */ }
+\end{lstlisting}
+
+\noindent
+The function \lstinline{do} in above code snippet takes input value of type
+\lstinline{$[[(Int/\ String) \/ Bool]]$}. However, we cannot pass a value of
+type \lstinline{$[[(Int \/ Bool) /\ (String \/ Bool)]]$}
+to the function \lstinline{do}: we get a type error if we try
+to do that in a system with standard subtyping (without distributivity),
+as standard subtyping fails to identify that the value has a subtype of the
+expected argument type.
+%Distributive subtyping is more expressive than standard subtyping.
+Distributive rules enable this subtyping relation.
+With distributivity of unions over intersections
+(and vice-versa), the type \lstinline{$[[(Int \/ Bool) /\ (String \/ Bool)]]$} is a subtype
+of \lstinline{$[[(Int /\ String) \/ Bool]]$}
+(in particular, by \rref{ds-distor} in \Cref{fig:dist:dec:subtyping}).
+As such
+with distributive subtyping, the following Ceylon program type-checks:
+
+\begin{lstlisting}[language=Scala]
+  variable <Integer | Boolean> & <String | Boolean> x = true; do(x);
+\end{lstlisting}
+
+\begin{comment}
+In our work we study an expressive subtyping relation with various
+distributivity rules and nominal types.
+\end{comment}
+
+\paragraph*{Nominal Types and Other Extensions to \name.}
+We also study several extensions to \name, including nominal types.
+The extension with nominal
+types is interesting, since nominal types are highly relevant in practice.
+We show a sound, complete and decidable algorithmic formulation of subtyping
+with nominal types by extending an approach by \cite{huang2021distributing}.
+We show that
+disjointness can also be employed in the presence of nominal types.
+%We formalize an extension of \name with nominal types in \Cref{sec:inter}.
+This extension rejects ambiguous programs
+with overlapping nominal types in different branches of switch
+construct at compile time. It illustrates that disjointness is practically
+applicable to structural types as well as the nominal types.
+For example, the following program will statically be rejected in \name with
+nominal types:
+
+\begin{lstlisting}[language=Scala]
+  Bool isstudent (x: Person | Student) = switch (x)
+                                           (y : Person)  -> false
+                                           (y : Student) -> true
+\end{lstlisting}
+
+\noindent Whereas, the following program will be accepted
+if we know that \lstinline{Person} and \lstinline{Vehicle} are disjoint:
+
+\begin{lstlisting}[language=Scala]
+  Bool isvehicle (x: Person | Vehicle) = switch (x)
+                                           (y : Person)  -> false
+                                           (y : Vehicle) -> true
+\end{lstlisting}
+
+\begin{comment}
+%Second case is employed in \rref{step-beta}.
+%The presence of annotations with the static types,
+%ensures that types are preserved during substitution in
+%beta-reduction and \emph{switch} cases.
+For example, in the expression:
+%
+
+\[(\lambda x . x : [[Int]] \to ([[Int \/ String]]))~1\]
+
+\noindent if the result of reduction would simply be $[[1]]$, then some
+static information would be lost, because the type of $[[1]]$ is $[[Int]]$,
+but the static type of the original expression is $[[Int \/ String]]$.
+In other words, the original type would not be preserved: we
+would get a \emph{subtype} instead. This phenomenon is of course well-known
+in OOP languages and languages with subtyping, where often preservation
+needs to be weakened to allow the type after reduction to be a subtype.
+For instance, in Featherweight Java~\cite{DBLP:journals/toplas/IgarashiPW01}
+the preservation theorem states that the type after reduction is a
+subtype (and not necessarily the original type of the expression). In our
+operational semantics we opted to keep track of the static types instead,
+and preserve the original type. Thus the resulting value is $[[1 : Int \/ String]]$.
+This considerably simplifies the metatheory, although in an actual
+implementation not tracking the static type would be more efficient.
+\end{comment}
+
+
+
+
+\begin{comment}
+\paragraph*{Reduction and annotated values}
+Our reduction preserves type.
+So a term of union type can only evaluates to a value of an union type.
+We use type annotations to construct such values.
+For example, $[[2:Int\/Bool]]$ is a value, and it is the result of
+$[[(switch 1 Int (x p1) Bool (neg y)):Int\/Bool]]$.
+This annotation is necessary for precise type preservation under
+bidirectional typing. It keeps the inferred type of expressions.
+
+\snow{I think we might be able to relax preservation by allowing subtyping.
+For which precise reason we failed in that variant? But I guess it is ok
+to omit that unless the reviewers ask}
+
+Lambda values can be unannotated or with two annotations.
+The outer one serves the above purpose, while the inner one keeps the original
+input type, which is used to decorate the input value in beta reduction.
+% The outer one is for the preservation purpose,
+% while the inner one records its principal type.
+%
+\begin{verbatim}
+e = switch (x) {Char -> ... , Bool -> ...}
+
+(\x . e : Top -> Int : Int -> Int) (1:Int) --> (\x . e : Int->Int) (1:Int) --> e [x~>1:Int]
+\end{verbatim}
+The expression was legal when x has type Top but becomes illegal when x has type Int.
+It shows that we have to keep the original input type in lambdas.
+
+\snow{Updated}
+%\snow{I don't know why we need to keep a lambda's original type. We
+%don't need to distinguish two arrow types in switch.}
+
+Deciding to take which branch in the runtime requires knowing the
+precise type of the switched term.
+Instead of the annotation, we need to look into the wrapped value
+(which is called as \emph{pre-value}) for its principal type.
+Given $[[2:Int\/Bool]]$, we still know that it is an integer inside.
+We then look for a branch that expects a supertype of $[[Int]]$.
+As previously discussed, the exhaustiveness checking promises at least
+one branch matches.
+And the disjointness restriction ensures it can only be one branch.
+Therefore the reduction is deterministic.
+If the two branch types are both supertype of the value type, they violates
+the definition, no matter the Definition~\ref{def:disjointness} or the
+improved one.
+In the following example, the first branch will be chosen, just like when
+we passing $[[1]]$ to it.
+
+\begin{verbatim}
+       (switch (2:Int\/Bool) Int (x p1) Bool (neg y))
+       --> (2:Int p1) :Int\/Bool
+       --> 3 : Int \/ Bool
+\end{verbatim}
+
+Wrapping values with annotation also helps us to unify the related reduction rules.
+\snow{I guess so?}
+\end{comment}
+
+\begin{comment}
+\paragraph{Paper Workflow.}
+\baber{New paragraph to outline the workflow of the paper.}
+Rest of the paper is organized as follows. \Cref{sec:union} explains
+a simple union calculus (\name), an extension of lambda calculus with
+union types and the disjoint switch expression. \Cref{sec:inter}
+further enriches the \name with intersection types, nominal types,
+and distributive subtyping. Note that the calculus in \Cref{sec:union}
+is a strict subset of the calculus in \Cref{sec:inter}.
+\Cref{sec:discussion} explains the extensions of \name
+with parametric polymorphism and with a generalized subtyping rule.
+\Cref{sec:related,sec:conclusion} discuss the related work and the future
+work respectively.
+\end{comment}
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%%% Union Calculus  %%%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{The Union Calculus \name}
+\label{sec:union}
+
+This section introduces the simplified union calculus \name. The distinctive feature
+of the \name calculus is a type-based switch expression with disjoint
+cases, which can be used to eliminate values with union types. In this first
+formulation of \name we only include the essential features of a calculus with disjoint
+switches: union types and disjoint switches. Section~\ref{sec:inter} then presents a richer formulation of \name
+with several extensions of practical relevance.
+We adapt the notion of disjointness from previous work on
+\emph{disjoint intersection types}~\citep{oliveira2016disjoint} to \name, and show that \name is type
+sound and deterministic.
+
+%%%%%%%%%%%%%%%%%%%%%
+%% Syntax
+%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Syntax}\label{sec:union:syntax}
+\Cref{fig:union:syntax} shows the syntax for \name. Metavariables
+$[[A]]$, $[[B]]$ and $[[C]]$ range over types.  Types include top ($[[Top]]$),
+bottom ($[[Bot]]$), integer types ($[[Int]]$), function types ($[[A -> B]]$), union types ($[[A \/ B]]$)
+and null types ($[[Null]]$). Metavariable $[[e]]$ ranges over
+expressions. Expressions include variables ($[[x]]$), integers
+($[[i]]$), lambda abstractions
+($[[\x.e]]$), applications ($[[e1 e2]]$), a novel switch expression
+($[[switch e A e1 B e2]]$) and the $[[null]]$ expression.
+The \lstinline{switch} expression evaluates a specific branch by matching the types in the cases.
+Note that, although
+the switch expression in \name only has two branches, a multi-branch switch
+can be easily encoded by employing nested switch expressions. We model
+the two-branch switch for keeping the formalization simple, but no expressive power is lost
+compared to a multi-branch switch.
+Metavariable $[[v]]$ ranges over values. Values include
+$[[i]]$, $[[\x.e]]$ and $[[null]]$ expressions.
+Finally, a context ($[[G]]$) maps variables to their associated types.
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \begin{tabular}{lrcl} \toprule
+      Type & $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[A \/ B]] \mid [[Null]] $ \\
+      Expr & $[[e]]$ & $\Coloneqq$ & $[[x]] \mid [[i]] \mid [[\x.e]] \mid [[e1 e2]] \mid [[switch e A e1 B e2]] \mid [[null]]$\\
+      Value & $[[v]]$ & $\Coloneqq$ & $[[i]] \mid [[\x.e]] \mid [[null]] $\\
+      Context & $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]]$ \\
+      \bottomrule
+    \end{tabular}
+  \end{small}
+  \begin{small}
+    \centering
+    \drules[s]{$ [[A <: B ]] $}{Subtyping}{top, null, int, arrow, bot, ora, orb, orc}
+  \end{small}
+  \caption{Syntax and subtyping for \name.}
+  \label{fig:union:syntax}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%%%%%
+%% Subtyping
+%%%%%%%%%%%%%%%%%%%%%
+\subsection{Subtyping}
+\label{sec:union:sub}
+The subtyping rules for \name are shown at the bottom of
+\Cref{fig:union:syntax}. The rules are standard.
+\Rref{s-top} states that all types are subtypes of
+the \lstinline{$[[Top]]$} type. \Rref{s-bot} states that $[[Bot]]$ type is subtype of
+all types. \Rref{s-null} states that the \lstinline{$[[Null]]$} type is a subtype of itself.
+\Rref{s-int,s-arrow} are standard rules for integers and
+functions respectively.  Functions are contravariant in input types
+and covariant in output types. \Rref{s-ora,s-orb,s-orc} deal with the
+subtyping for union types. \Rref{s-ora} says that the union type of $[[A]]$ and $[[B]]$
+is a subtype of another type $[[C]]$ if both $[[A]]$ and $[[B]]$ are subtypes of
+$[[C]]$. \Rref{s-orb,s-orc} state if a
+type is subtype of one of the components of a union type, then it is subtype of the
+union type.
+The subtyping relation for \name is reflexive and transitive.
+
+\begin{lemma}[Subtyping reflexivity]
+  $[[A <: A]]$
+\label{lemma:union:sub:refl}
+\end{lemma}
+
+\begin{lemma}[Subtyping transitivity]
+  If $[[A <: B]]$ and $[[B <: C]]$ then $[[A <: C]]$
+\label{lemma:union:sub:trans}
+\end{lemma}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%% Disjointness
+%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Disjointness}\label{sec:union:disj}
+
+The motivation for a definition of disjointness based on bottom-like types is
+basically that in disjoint switches, the selection of branches can be viewed
+as a type-safe downcast. For instance, recall the example in Section~\ref{subsec:key}:
+
+\begin{lstlisting}[language=Scala]
+  switch x {
+     (y : String | Int)  -> 0
+     (y : Int | Bool)    -> 1
+  }
+\end{lstlisting}
+
+\noindent Here \lstinline{x} may have type \lstinline{Int | String | Bool}
+and the two branches in the disjoint switch cover two subtypes
+\lstinline{String | Int} and \lstinline{Int | Bool}. When considered
+together those subtypes cover all possibilities for the value \lstinline{x} (i.e.
+\lstinline{x} can be either an integer, a string or a boolean, and the two cases
+cover all those possibilities). The \emph{exhaustiveness} of the downcasts
+is what ensures that the downcasts are type-safe (that is they cannot fail
+at runtime). However, we also need to ensure that the two cases do not overlap
+to prevent ambiguity. In essence, in this simple setting of \name, checking
+that two types do not overlap amounts to check that there are no
+basic types (like \lstinline{Int} or \lstinline{Bool}) in common.
+In other words the only common subtypes should be bottom-like types.
+
+\paragraph*{Bottom-Like Types.}
+\emph{Bottom-like} types are types that are equivalent (i.e.  both
+supertypes and subtypes) to $\bot$. In \name, there are infinitely
+many such types, and they all are uninhabited by values.
+According to the inductive definition shown at the top of
+\Cref{fig:union:disj-typ}, they include the bottom type itself (via
+\rref{bl-bot}) and unions of two bottom-like types (via \rref{bl-or}),
+e.g. $[[Bot \/ Bot]]$.
+The correctness of our definition for bottom-like types is
+established by the following property:
+
+\begin{lemma}[Bottom-Like Soundness and Completeness]
+  $[[botlike A]]$ if and only if \ $\forall [[B]]$, $[[A <: B]]$.
+\label{lemma:union:bl-soundness}
+\end{lemma}
+
+\paragraph*{Declarative Disjointness.}
+The declarative definition for disjointness is as follows:
+
+\begin{definition}[$[[Bot]]$-Disjointness]
+  A $*$ B $\Coloneqq$ $\forall$ C, if $[[C <: A]]$ and $[[C <: B]]$ then $[[botlike C]]$
+\label{def:union:disj}
+\end{definition}
+
+\noindent That is, two types are disjoint if all their common subtypes are \emph{bottom-like}.
+% \begin{comment}
+% With this definition we have that different primitive types are disjoint. For example
+% $[[Int]] * [[Bool]]$ since the only common subtypes of $[[Int]]$ and $[[Bool]]$
+% are bottom-like. A more interesting case is the disjointness of two function types.
+% It turns out that function types are never disjoint, since we can always find
+% a common subtype for any two function types. For example, if we have $[[Int -> Bool]]$
+% and $[[String -> Char]]$ then a common subtype that is not bottom-like is
+% $[[Top -> Bot]]$. Therefore, $[[Int -> Bool]]$ and $[[String -> Char]]$ are not
+% disjoint.
+
+% \noindent Reader may think at this point that $[[Bot]]$ type can simply be used in \Cref{def:union:disj}
+% instead of $[[botlike C]]$ in the conclusion. Answer to this question is
+% union type with $[[Bot]]$ as all primitive types is also a least subtype in \name.
+% $[[botlike C]]$ also handles this case.
+% \end{comment}
+We give a few examples next, employing a bold font to highlight the types
+being compared for disjointness:
+(Note that $\boldsymbol{A}$ and $\boldsymbol{B}$
+are placeholders for actual types)
+
+%---------------------------------------------------------------------------%%
+
+\begin{enumerate}
+  \item $\boldsymbol{A = [[Int]], \ B = \ [[Int -> Bool]]:}$
+        \lstinline{$[[Int]]$} and \lstinline{$[[Int -> Bool]]$} are disjoint types. All common subtypes
+        of \lstinline{$[[Int]]$} and \lstinline{$[[Int -> Bool]]$} are \emph{bottom-like} types,
+        including $[[Bot]]$ and unions of $[[Bot]]$ types.
+  \item $\boldsymbol{A = [[Int \/ Bool]], \ B = \ [[Bot]]:}$
+    \lstinline{$[[Int \/ Bool]]$} and $[[Bot]]$ are disjoint types. All common subtypes are \emph{bottom-like}.
+    In general, the type $[[Bot]]$ (or any \emph{bottom-like} type)
+    is disjoint to another type.
+ \item $\boldsymbol{A = [[Int]], \ B = \ [[Int]]:}$ \\
+       $[[Int]]$ and $[[Int]]$ are not disjoint types because they share a common subtype $[[Int]]$ which
+       is not \emph{bottom-like}. In general, one type is not disjoint with
+       itself, unless it is bottom-like.
+  \item $\boldsymbol{A = [[Int]], \ B = \ [[Top]]:}$
+        \lstinline{$[[Int]]$} and \lstinline{$[[Top]]$} are not disjoint types because they share a common
+    subtype \lstinline{$[[Int]]$} which is not \emph{bottom-like}. In general no type
+    is disjoint to \lstinline{$[[Top]]$}, except for \emph{bottom-like} types.
+    Also, one type is not disjoint with itself, unless it is \emph{bottom-like}.
+  \item $\boldsymbol{A = [[Int -> Bool]], \ B = \ [[String -> Char]]:}$
+    The types \lstinline{$[[Int -> Bool]]$} and \lstinline{$[[String -> Char]]$} are not disjoint,
+    since we can find non-bottom-like types that are subtypes
+    of both types. For instance \lstinline{$[[Top -> Bot]]$} is a subtype of both types.
+    More generally, any two function types can never be disjoint: it is always
+    possible to find a common subtype, which is not \emph{bottom-like}.
+\end{enumerate}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph*{Disjointness for Intersection Types.}
+In essence, disjointness for \name is dual to the disjointness
+notion in $\lambda_i$~\citep{oliveira2016disjoint}, a calculus with
+disjoint intersection types.
+In \name, two types are disjoint if they do not share any common
+\emph{subtype} which is not \emph{bottom-like}.
+While in $\lambda_i$, two types are disjoint if they do not share any
+common \emph{supertype} which is not \emph{top-like}  (i.e. equivalent
+to $[[Top]]$). While a disjoint switch
+provides deterministic behavior for downcasting, disjointness in
+intersection types prevents ambiguity in upcasting. In a type-safe
+setting, if two values $[[v1]]$ and $[[v2]]$ (of type $[[A1]]$ and
+$[[A2]]$) can both be upcasted to type $[[B]]$, then $[[B]]$ must be a common
+supertype of $[[A1]]$ and $[[A2]]$.  The disjointness restriction of
+$[[A1]]$ and $[[A2]]$ means they cannot have any \emph{non-top-like} common
+supertype, so when the two values together upcasted to a type like
+$[[Int]]$, only one of them can contribute to the result.
+Prior work on disjoint intersection types is also helpful to find an
+algorithmic formulation of disjointness.
+Declarative disjointness does not directly lead to an algorithm.
+However, we can find an algorithmic formulation that employs
+dual rules to those for disjoint intersection types.
+
+\paragraph*{Algorithmic Disjointness.}
+%% Declarative disjointness does not directly lead to an algorithm.
+We present an algorithmic version of disjointness in
+the middle of \Cref{fig:union:disj-typ}.
+\Rref{ad-btmr,ad-btml} state that the $[[Bot]]$
+type is disjoint to all types.  \Rref{ad-intl,ad-intr} state that
+$[[Int]]$ and $[[A -> B]]$ are disjoint types.  Algorithmic
+disjointness can further be scaled to more primitive disjoint types
+such as $[[Bool]]$ and $[[String]]$ by adding more rules similar to
+\rref{ad-intl,ad-intr} for additional primitive types.
+\Rref{ad-null-intl,ad-null-intr} state that
+$[[Null]]$ and $[[Int]]$ are disjoint types.
+Similarly, \rref{ad-null-funl,ad-null-funr} state that
+$[[Null]]$ and $[[A -> B]]$ are disjoint types.
+\Rref{ad-orl,ad-orr} are two symmetric rules for union types. Any type $[[C]]$ is
+disjoint to an union type $[[A \/ B]]$ if $[[C]]$ is disjoint to both
+$[[A]]$ and $[[B]]$.
+We show that algorithmic disjointness is sound and complete
+with respect to its declarative specification (Definition~\ref{def:union:disj}).
+% , and disjointness is a symmetric relation.
+% The following lemmas summarize key properties of disjointness.
+
+\begin{theorem}[Soundness and Completeness of Algorithmic Disjointness]
+  \ $[[A * B]]$ if and only if $[[A *s B]]$.
+\label{lemma:union:disj-sound}
+\end{theorem}
+
+% \begin{comment}
+% \begin{proof}
+%   By induction on algorithmic disjointness relation.
+%   \begin{itemize}
+%     \item Cases \rref{ad-btmr, ad-btml, ad-orl, ad-orr} require induction on hypothesis
+%           and \Cref{lemma:union:sub-or}.
+%     \item Cases \rref{ad-intl, ad-intr} require induction on type and \Cref{lemma:union:sub-or}.
+%   \end{itemize}
+% \end{proof}
+% \end{comment}
+
+% \begin{lemma}[Disjointness Completeness]
+%   If \ $[[A *s B]]$ \ then \ $[[A * B]]$.
+% \label{lemma:union:disj-complete}
+% \end{lemma}
+
+% \begin{comment}
+% \begin{proof}
+%   By induction on type A.
+%   \begin{itemize}
+%     \item Case $[[Top]]$ requires \Cref{lemma:union:bl-disj}.
+%     \item Case $[[Bot]]$ is trivial to prove.
+%     \item Case $[[Int]]$ requires induction on type B and
+%           \Cref{lemma:union:bl-disj,lemma:union:disj-sym}.
+%     \item Case $[[A -> B]]$ requires induction on type B and \Cref{lemma:union:disj-sym}.
+%     \item Case $[[A \/ B]]$ follows directly from inductive hypothesis.
+%   \end{itemize}
+% \end{proof}
+% \end{comment}
+
+%\ningning{Why this one here? I think we can show it for the declarative
+%  definition. Then the following one follows from soundness and completeness.}
+
+% \begin{comment}
+% \begin{lemma}[Bottom-Like Disjoint]
+%   If \ $[[botlike A]]$ \ then \ $[[A * B]]$.
+% \label{lemma:union:bl-disjoint}
+% \end{lemma}
+% \end{comment}
+
+\noindent A natural property of \name is
+that if type $[[A]]$ and type $[[B]]$ are two disjoint types, then subtypes
+of $[[A]]$ are disjoint to subtypes of $[[B]]$. This property dualises
+the \emph{covariance of disjointness} property in calculi with disjoint
+intersection types~\citep{alpuimdisjoint}.
+
+\begin{lemma}[Disjointness contravariance]
+  If \ $[[A *s B]]$ \ and \ $[[C <: A]]$ \ and \ $[[D <: B]]$  then \ $[[C *s D]]$.
+\label{lemma:union:disj-sub}
+\end{lemma}
+
+
+\noindent Further, disjointness relation is symmetric:
+
+\begin{lemma}[Disjointness Symmetry]
+  If \ $[[A *s B]]$ \ then \ $[[B *s A]]$.
+\label{lemma:union:disj-sym}
+\end{lemma}
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[bl]{$[[botlike A]]$}{Bottom-Like Types}{bot, or}
+  \end{small}
+  \begin{small}
+    \centering
+    \drules[ad]{$[[A * B]]$}{Algorithmic Disjointness}{btmr, btml, intl, intr, null-intl, null-intr, null-funl, null-funr, orl, orr}
+  \end{small}
+  \begin{small}
+    \centering
+    \drules[typ]{$ [[G |- e : A]] $}{Typing}{int, null, sub, app, abs, var, switch}
+  \end{small}
+  \caption{Bottom-like types, algorithmic disjointness and typing for \name.}
+  \label{fig:union:disj-typ}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+%%%%%%%%%%%%%%%%%%%%%
+%% Typing
+%%%%%%%%%%%%%%%%%%%%%
+\subsection{Typing}\label{sec:union:typ}
+% \snow{I think we can drop the description of the conventional rules to save space since
+%   these rules are self-explained. This also applies to reduction rules.
+%   E.g. drop all the sentences between ``Typing rules are mostly standard.''
+%   and ``The most interesting and novel ...''}
+%\baber{Makes sense. I'll cut down some text from this section.}
+The typing rules are shown at the bottom of \Cref{fig:union:disj-typ}.
+% We adopt bi-directional type-checking~\cite{pierce2000local} in our calculus.  There
+% are two typing modes in bi-directional typing: inference mode
+% ($[[=>]]$) and checking mode ($[[<=]]$). In the inference mode, the type of
+% an expression $[[e]]$ is inferred.  In the checking
+% mode, an expression $[[e]]$ is checked against a given type $[[A]]$.
+They are mostly standard. An integer has type $[[Int]]$,
+$[[null]]$ has type $[[Null]]$ and variable $[[x]]$ gets type from the
+context. \Rref{typ-app} is the standard rule for
+function application. Similarly, \rref{typ-sub} and \rref{typ-abs}
+are standard subsumption and abstraction rules respectively.
+% \Rref{typ-app} is the standard rule for
+% function application.
+% It is an elimination rule for the functions.
+% To eliminate a function, we apply that function to the arguments.
+% \Rref{typ-app} states that $[[e1]]$ has function type $[[A -> B]]$
+% and $[[e2]]$ has type $[[A]]$ which is the input type of $[[e1]]$.
+% Therefore, applying $[[e1]]$ to $[[e2]]$ yields type $[[B]]$.
+% \Rref{typ-sub} is the subsumption rule. It states that an expression
+% $[[e]]$ can be promoted to have supertype of its type.
+% \Rref{typ-abs} is the standard introduction rule for lambda
+% expressions. To introduce a lambda expression $[[\x.e]]$ with type
+% $[[A -> B]]$, it is sufficient for lambda body $[[e]]$ to have
+% output type $[[B]]$ in an extended context with parameter $[[x]]$ of
+% input type $[[A]]$.
+The most interesting and novel rule is for \emph{switch} expressions
+(\rref{typ-switch}). It has four conditions.
+%The remaining conditions are standard for a calculus with
+%union types and case expression and have been studied in various
+%calculi (\baber{reference to calculi}).
+First, $[[G |- e : A \/ B]]$ ensures
+%% that the expression $[[e]]$ is well-typed and has type $[[A \/ B]]$.
+%% Note that this condition ensures
+\emph{exhaustiveness} of the cases in the switch: $e$ must
+check against the types in the branches of the switch.
+The next two conditions ensure that
+branches of case expressions are well-typed and have type
+$[[C]]$,
+%which is the overall type of the switch expression.
+where the input variable is bound to type $[[A]]$ and to
+type $[[B]]$ respectively in the two branches.
+Finally,
+$[[A *s B]]$ guarantees the \emph{disjointness} of $[[A]]$ and $[[B]]$.
+This forbids overlapping types for the branches of case expressions
+to avoid non-deterministic results.
+Since all the branches have type $[[C]]$, the whole
+switch expression has type $[[C]]$.
+Note that the two branches can have different return types.
+For example, if $e_1$ and $e_2$ have type \lstinline{$[[Int]]$}
+and \lstinline{$[[String]]$} respectively,
+the whole expression can have type \lstinline{$[[Int \/ String]]$}.
+% We also formalize an algorithmic bi-directional type system for \name
+% and show equivalence to standard type assignment system in Appendix B
+% of the supplementary material.
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \drules[typ]{$ [[G |- e : A]] $}{Bi-directional Typing}{int, var, ann, app, sub, abs, typeof}
+%   \end{small}
+%   \caption{Typing for \name.}
+%   \label{fig:union:typ}
+% \end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%% Operations Semantics
+%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Operational Semantics}
+\label{sec:union:os}
+Now we discuss the small-step operational semantics of \name.
+An important aspect of this semantics is that union elimination is \textit{type-directed}:
+types are used to pick the branch of the switch expression.
+% An important aspect of the semantics is that it is type-directed
+% \cite{Huang:typedirected}: type annotations are used to guide reduction.
+% Similar terms that differ only on type annotations can reduce in different
+% ways.
+
+% \paragraph*{Reduction rules}
+\Cref{fig:union:os} shows the operational semantics of \name.
+\Rref{step-appl,step-appr,step-beta} are the standard call-by-value reduction
+rules
+for applications.
+% \Rref{step-appl} reduces
+% the function part of an application,
+% and \rref{step-appr} reduces the argument when
+% the function part is already a value.
+% \Rref{step-beta} is the standard beta-reduction rule.
+Of particular interest are
+\rref{step-switch,step-switchl,step-switchr}, which reduce
+the \emph{switch} expressions.
+First,
+\rref{step-switch} reduces the case expression $[[e]]$,
+until it becomes a value $[[v]]$, at which point
+we must choose between the two branches of \emph{switch}.
+We do so by inspecting the type of $[[v]]$:
+if the \textit{approximate type} of $[[v]]$ is
+a subtype of type of the left branch,
+then \rref{step-switchl} evaluates
+the left branch of the \emph{switch} expression,
+or otherwise if it is a subtype of the type of the right branch,
+\rref{step-switchr} evaluates the right branch.
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[step]{$[[e --> e']]$}{Operational Semantics}{appl, appr, beta, switch, switchl, switchr}
+  \end{small}
+  \begin{center}
+  % \vspace{-2mm}
+  % {\renewcommand{\arraystretch}{1.2}
+  %   \begin{tabular}{p{9.3cm}}
+  %     \drule[]{step-switchl} \\
+  %     \drule[]{step-switchr} \\
+  %   \end{tabular} }
+    %\vspace{-5mm}
+
+  {\renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|lcl|}
+      \multicolumn{3}{c}{Approximate Type $[[dyntype v]]$} \\
+      \hline
+      $[[dyntype i]]$ & = & $[[Int]]$ \\
+      $[[dyntype \x.e]]$ & = & $[[Top -> Bot]]$ \\
+      $[[dyntype null]]$ & = & $[[Null]]$ \\
+      \hline
+    \end{tabular} }
+    \end{center}
+  \caption{Operational semantics and approximate type definitions for \name.}
+  \label{fig:union:os}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+Note that the approximate type definition
+gives only a subtype of the actual type for a lambda value.
+This works, because the
+approximate type is only
+employed to allow the selection of a case with a function type,
+and in \name two function types can never be disjoint. Therefore, if
+there is a branch with a function type, then that must be the branch
+that applies to a lambda value.
+Note also that the program has been type-checked before
+hand, so we know that the static type of the value is compatible
+with the types on the branches.
+The subtyping condition in
+\rref{step-switchl,step-switchr} is important, as it provides
+flexibility for the value to have various subtypes of $[[A]]$ and $[[B]]$, instead
+of strictly having those types. Recall that
+the typing rule for \emph{switch} (\rref{typ-switch}) requires that
+types of left and right branches of a \emph{switch}
+expression to be disjoint.
+This ensures that \rref{step-switchl,step-switchr} cannot overlap, which, as we will
+see, is important for the
+operational semantics to be \textit{deterministic}.
+
+
+
+
+%\bruno{Following text needs to be fixed after changes in Figure.}
+
+% \begin{comment}
+% Using only $[[A2]]$ may lead to ill-typed programs. Consider
+% the following example:
+% \[
+%   [[ (\x . e : Top -> Int : Int -> Int) (1:Int) ]]
+%   [[-->]] [[ (\x . e : Int->Int) (1:Int) ]]
+%   [[-->]] [[ e [ x~>1:Int ] ]]
+% \]
+% %
+% Here we assume that reduction does not keep the dynamic type of lambdas,
+% and we will not be able to know $[[A1]]$ when doing beta-reduction.
+% We further assume the lambda that contains a switch expression that analyzes
+% the function input. Say $[[e]]$ is $[[switch x Char e1 Bool e2]]$.
+% It is acceptable because $[[x]]$ has type $[[Top]]$.
+% The function expects a term of type top, but it is given a integer to.
+% The switch expression $[[e]]$, if we substitute $[[x]]$ in it by $[[1 : Int]]$
+% it will be comes illegal because it has no branch dealt with an integer.
+% So we have to use the dynamic type $[[Top]]$ instead. And that is why
+% we need to keep two annotations for an lambda.
+% \end{comment}
+
+
+
+%Drop Static Type ($\rceil[[v]]\lceil$) drops the static type
+%from annotated values $[[p:A]]$ and returns $[[p]]$.
+%It does not change non-annotated values $[[\x.e]]$ and returns
+%them as it is. The result expression $[[e1]]$ of ($\rceil[[v]]\lceil$)
+%is either a pre-value $[[p]]$ or $[[\x.e]]$.
+%Therefore, there are two cases to be considered in beta-reduction
+%during substitution: one for pre-values and the other for $[[\x.e]]$.
+
+%For the first case, note that the annotation of the pre-value
+%$[[p]]$ changes from $[[p:A]]$ to $[[p:A2:A1]]$ during substitution.
+%Specifically,
+%$\rceil[[v]]\lceil$ drops $[[A]]$ from $[[p:A]]$ and returns $[[p]]$
+%as $[[e1]]$. Substitution then
+%substitutes free occurrences of variable $[[x]]$ with $[[e1:A2:A1]]$.
+%\snow{Question about the rule design: why drop $A$? Substituting $x$ by
+%$[[p:A:A2:A1]]$ should have the same effect as $[[p:A2:A1]]$.
+%On the other hand, why adding $[[A2]]$ after dropping $[[A]]$
+%instead of using $[[p:A1]]$?}
+%\snow{For the above sentence: We need double annotation here because the
+%result of function application might be a raw lambda, right?}
+%The second case occurs when the
+%argument of a function is a non-annotated lambda expression.
+
+
+% \begin{comment}
+% \Rref{step-beta} deals with a special case, that occurs when the
+% argument of a function is a non-annotated lambda expression.
+% With bi-directional type-checking an expression such as:
+% ($[[\f.f 1:(Int -> Int -> Int) : (Int -> Int -> Int)]]$)($[[\x.x]]$)
+% \bruno{example here.} \baber{Done.}
+% is well-typed, since bi-directional type-checking propagates
+% type information to the arguments. Thus, the dynamic semantics
+% needs to deal with such programs.
+% We emphasize the fact that $[[\x.e]]$ is not a value in \name.
+% The rule follows the same approach as
+% \rref{step-beta} except that both of the input types are kept with
+% $[[\x.e]]$ during substitution i.e $[[\x.e:A2:A1]]$. \Rref{step-ann}
+% reduces an annotated expression only if it is not a value and $[[e]]$
+% reduces to some $[[e']]$. \Rref{step-rmann} drops inner
+% annotations. \Rref{step-lamann} adds one more type annotation with
+% lambda expressions having single type annotation to make them values.
+% \end{comment}
+
+
+%This is because that non-annotated lamda expressions do not preserve type
+%and we cannot calculate the static type of non-annotated lambda expressions.
+%Significance of static type is already explained above.
+
+
+%\bruno{The following sentence is out-of-place. It should appear earlier
+%  when we talk about disjointness. Perhaps you can state the property
+%formally at that point.}
+
+%\begin{comment}
+\paragraph*{Approximate Type.} The dynamic semantics employs a simple
+function that retrieves the dynamic type of a value.
+The definition is shown at the bottom of \Cref{fig:union:os}.
+$[[Int]]$ and $[[Null]]$ are returned when $[[v]]$ is an integer $[[i]]$ or
+a $[[null]]$ respectively.
+Otherwise, for functions, the least function type $[[Top -> Bot]]$ is returned.
+%\end{comment}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Type Safety and Determinism
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Type Soundness and Determinism}
+\label{sec:union:safety}
+
+In this section, we prove that
+\name is type sound and deterministic. Type soundness is established
+by the type preservation and progress
+theorems. Type preservation (\Cref{lemma:union:preservation}) states that
+types are preserved during reduction. Progress
+(\Cref{lemma:union:progress}) states that well typed programs never get
+stuck: a well typed expression $[[e]]$ is either a value or it can
+reduce to some other expression $[[e']]$.
+%Preservation and progress together establish type safety.
+%We add one more choice in the conclusion
+%of progress lemma to handle non-annotated lambda expressions
+%($[[\x.e]]$). This last condition is necessary because the type system
+%employs bi-directional type checking and unannotated lambdas (which are not values)
+%can be well-typed in the checking mode.
+
+\begin{theorem}[Type Preservation]
+\label{lemma:union:preservation}
+  If \ $[[G |- e : A]]$ and $[[e --> e']]$ then $[[G |- e' : A]]$.
+\end{theorem}
+
+% \begin{comment}
+% \begin{proof}
+%   By induction on typing relation and subsequent inverting reduction relation.
+%   \begin{itemize}
+%     \item Cases \rref{typ-int, typ-var, typ-sub, typ-abs} are trivial to prove.
+%     \item Case \rref{typ-ann} requires helping \cref{lemma:union:check-pexpr-ann}.
+%     \item Case \rref{typ-app} requires helping \cref{lemma:union:pexpr-check-sub}
+%           and substitution \cref{lemma:union:substitution} for beta reduction.
+%     \item Case \rref{typ-typeof} requires substitution \cref{lemma:union:substitution}.
+%   \end{itemize}
+% \end{proof}
+
+% \baber{ToDo: change name of helping lemmas.}
+
+% \end{comment}
+
+%\snow{The following theorem can be stated in one line}
+\begin{theorem}[Progress]\label{lemma:union:progress}
+If \ $[[ [] |- e : A]]$ then either $[[e]]$ is a value;
+or $[[e --> e']]$ for some $[[e']]$.
+\end{theorem}
+
+%\ningning{I removed Substitution lemma because it's uninteresting.}
+
+% \begin{comment}
+% \begin{proof}
+% By induction on typing relation.
+%   \begin{itemize}
+%     \item Cases \rref{typ-int, typ-var, typ-app, typ-sub, typ-abs} are trivial to prove.
+%     \item Case \rref{typ-anno} requires \cref{lemma:union:value-not-value}.
+%     \item Case \rref{typ-typeof} requires
+%     \cref{lemma:union:check-pexpr-ann,lemma:union:check-or-typ,lemma:union:pexpr-inf-typ}.
+%   \end{itemize}
+% \end{proof}
+
+% \begin{lemma}[Value Decidability]
+% \label{lemma:union:value-not-value}
+% $\forall$ $[[e]]$, \ value \ $[[e]]$ \ $\vee$ \ $\neg$ value \ $[[e]]$.
+% \end{lemma}
+
+% \begin{lemma}[Exclusivity of disjointness]
+% \label{lemma:union:check-or-typ}
+% If \ $[[A *s B]]$ \ and \ $[[G |- v : A \/ B]]$ \ then, either:
+%   \begin{enumerate}
+%     \item $[[G |- v : A]]$, or:
+%     \item $[[G |- v : B]]$
+%   \end{enumerate}
+% \end{lemma}
+
+% \begin{lemma}[pexpr-inf-typ]
+% \label{lemma:union:pexpr-inf-typ}
+% If \ $[[G |- v : A]]$ \ then:
+%   \begin{enumerate}
+%   \item $\exists$ $[[B]]$, \ $[[B <: A]]$
+%   \item and \ $[[G |- v : B]]$
+%   \end{enumerate}
+% \end{lemma}
+% \end{comment}
+
+Determinism of \name (\Cref{lemma:union:determinism}) ensures
+that a well-typed program reduces to a unique result.
+In particular,
+% This property is not
+% obvious as many operational semantics rules distinguish between pre-values,
+% values and annotated values.
+it guarantees that
+switch expressions are not order-sensitive: at any time, only one of the
+\rref{step-switchl,step-switchr} can apply.
+The determinism of the switch expression
+relies on an essential property
+that a value cannot check against two disjoint types (Lemma \ref{lemma:union:check-both-disj-false}).
+%This is in general true for all expressions, not just pre-values.
+
+\begin{lemma}[Exclusivity of Disjoint Types]
+  \label{lemma:union:check-both-disj-false}
+  If $[[A *s B]]$ then $\nexists$ $[[v]]$ such that both
+  $[[G |- v : A]]$ and $[[G |- v : B]]$ holds.
+\end{lemma}
+
+
+\begin{theorem}[Determinism]
+\label{lemma:union:determinism}
+  If $[[G |- e : A]]$ and $[[e --> e1]]$ and $[[e --> e2]]$ then $[[e1]]=[[e2]]$.
+\end{theorem}
+
+% \begin{comment}
+% \begin{proof}
+%   By induction on first reduction relation and inverting second reduction relation subsequently.
+%   All cases are trivial to solve by simple inversions except:
+%   \begin{itemize}
+%     \item Case \rref{typ-typeof} requires \cref{lemma:union:check-both-disj-false}.
+%   \end{itemize}
+% \end{proof}
+% \end{comment}
+
+%\baber{Again, should we show the property that a term cannot be checked against two disjoint types?}
+%\bruno{I think you can and connect that to the last point in the text above, perhaps.}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Discussion on Disjointness
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{An Alternative Specification for Disjointness}\label{sec:union:discussion}
+
+The current definition of disjointness (Definition~\ref{def:union:disj})
+%% is inspired by work on disjoint intersection types~\cite{oliveira2016disjoint}.
+%% This definition
+works well for the calculus presented in this section. But it is not the only
+possible formulation of disjointness.
+An equivalent formulation of disjointness is:
+
+\begin{definition}[$[[/\]]$-Disjointness]
+  \label{def:union:disj1}
+    $[[A *s B]]$ $\Coloneqq$ $\nexists$ $[[Cord]]$, $[[Cord <: A]]$ and $[[Cord <: B]]$
+\end{definition}
+
+\noindent
+According to the new definition, %(Definition~\ref{def:union:disj1})
+two types are disjoint if they do not have common subtypes
+that are \emph{ordinary}.
+Ordinary types (denoted by $[[Cord]]$) are essentially
+those types that are primitive, such as integers and functions (see
+Figure~\ref{fig:inter:system} for a formal definition).
+%The least value types of values in \name are always ordinary.
+%Consequentely values with a dynamic type $A$ should have an ordinary subtype $B$,
+%such that $B <: A$.
+%terms with bottom types cannot be reduced to values
+%It is important to establish the fact that definition
+%\Cref{def:union:disj1} is indeed equivalent to our current
+%definition.
+
+For the calculus presented in this section, we prove that the new
+definition is equivalent to the previous definition of disjointness.
+%% We prove that, for the calculus presented in this section, the new definition is
+%% equivalent to the previous definition of disjointness
+%% (Definition~\ref{def:union:disj}).
+
+\begin{lemma}[Disjointness Equivalence]
+%$[[A *s B]]$ if and only if A $*_{[[/\]]}$ B.
+Definition~\ref{def:union:disj1} ($[[/\]]$-Disjointness) is sound and
+complete to Definition~\ref{def:union:disj} ($[[Bot]]$-Disjointness)
+in \name defined in this section.
+\end{lemma}
+
+\noindent Why do we introduce the new definition of disjointness? It turns out that
+%% Definition~\ref{def:union:disj}
+the previous definition is not sufficient when the calculus is extended with
+intersection types. % (as in Section~\ref{sec:inter}).
+As we will see,
+%% Definition~\ref{def:union:disj1}
+the new definition will play an important role in such variant of the calculus.
+
+
+
+%---------------------------------------------------------------------------%%
+%---------------------------------------------------------------------------%%
+
+% Intersection Types, Distributivity, Nominal Types
+
+%---------------------------------------------------------------------------%%
+%---------------------------------------------------------------------------%%
+
+
+
+\section{\name with Intersections, Distributive Subtyping and Nominal Types}
+\label{sec:inter}
+In this section we extend \name with intersection types, nominal types
+and an enriched distributive subtyping relation.
+The study of an
+extension of \name with intersection types is motivated by the fact
+that most languages with union types also support intersection types (for example Ceylon, Scala or TypeScript).
+Furthermore, languages like Ceylon or Scala also support some form
+of distributive subtyping, as well as nominal types.
+Therefore it is important to understand whether those extensions
+can be easily added or whether there are some challenges.
+As it turns out, adding intersection types does pose a challenge,
+since the notion of disjointness inspired from disjoint intersection types~\citep{oliveira2016disjoint}
+no longer works. Moreover subtyping relations with distributive subtyping
+add significant complexity, and we need an extension that supports nominal types as well.
+\begin{comment}
+Fortunately, the alternative specification presented in
+\Cref{sec:union:discussion} comes to the rescue. Furthermore, we show how to obtain
+an algorithmic formulation of disjointness based on a novel notion
+called \emph{lowest ordinary subtypes}.
+
+We also add a simple form of nominal types along with intersection types.
+Nominal types are an interesting and significantly
+important extension of \name, illustrating
+that the disjointness approach works for structural types
+as well as nominal types.
+\end{comment}
+We show that desirable properties, including
+type soundness and determinism, are preserved in the extended version of \name.
+Moreover we prove that both disjointness and subtyping have sound, complete and decidable algorithms.
+%All the metatheory is formalized in Coq
+%theorem prover.
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%% Syntax and Semantics
+%%%%%%%%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+    \centering
+    \begin{tabular}{lcl} \toprule
+      $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[Null]] \mid [[A \/ B]] \mid \mathcolorbox{lightgray}{[[A /\ B]]} \mid \mathcolorbox{lightgray}{[[P]]} $ \\
+      $\mathcolorbox{lightgray}{[[Aord]], [[Bord]], [[Cord]]}$ & $\Coloneqq$ & $ [[Int]] \mid [[Null]] \mid [[A->B]] \mid [[P]] $ \\
+      $[[e]]$ & $\Coloneqq$ & $ [[x]] \mid [[i]] \mid [[\x.e]] \mid [[e1 e2]] \mid [[switch e A e1 B e2]] \mid [[null]] \mid \mathcolorbox{lightgray}{[[new P]]}$\\
+      $[[v]]$ & $\Coloneqq$ & $ [[i]] \mid [[\x.e]] \mid [[null]] \mid \mathcolorbox{lightgray}{[[new P]]} $\\
+      $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]]$ \\
+      $\mathcolorbox{lightgray}{[[PG]]}$ & $\Coloneqq$ & $ \cdot \mid [[PG , P1 <: P2]] \mid [[PG , P <: Top]]$ \\
+      \bottomrule
+    \end{tabular}
+    %\vspace{1cm}
+    %\drules[s]{$ [[A <: B ]] $}{Additional Subtyping Rules}{anda, andb, andc}
+    %\drules[ps]{$ [[PG |- A <: B]] $}{Additional subtyping rules}{p-in, anda, p-refl, andb, andc}
+    %\drules[ord]{$[[ordinary A]]$}{Ordinary Types}{int, arrow, null}
+\begin{small}
+    \drules[wft]{$ [[wft PG A]] $}{Well-formed Types}{top, bot, int, null, arrow, prim, or, and}
+    \drules[okp]{$ [[okp PG]] $}{Well-formed Nominal Contexts}{empty,cons,sub}
+\end{small}
+%    \vspace{-1cm}
+    %% \drules[ordn]{$ [[ordinaryn PG |- A]] $}{Ordinary Types}{int, null, arrow, prim}
+
+     %% \vspace{-0.5cm}
+     %% {\renewcommand{\arraystretch}{1.2}
+     %%   \begin{tabular}{|lll|}
+     %%     \multicolumn{3}{c}{Is Subtype \fbox{$[[isnominalsub PG A B]]$}} \\[0.15mm]
+     %%     \hline
+     %%     $[[isnominalsub [] A B]]$ & = & {\emph{False}} \\
+     %%     \multirow{3}{*}{$[[isnominalsub PG', P <: C A B]]$} & \ldelim\{{3}{*}[=] & \emph{True} \textbf{if} ($[[P]]$ = $[[A]]$) and ($[[C]]$ = $[[B]]$) \\
+     %%                                                 &  & $[[isnominalsub PG' C A]]$ \textbf{if} ($[[P]]$ = $[[A]]$) and ($[[C]] \neq [[B]]$) \\
+     %%                                                 &  & $[[isnominalsub PG' A B]]$ \textbf{otherwise} \\
+     %%     \hline
+     %%   \end{tabular} }
+    \caption{Syntax and well-formedness.}
+%      \snow{I hide issubtype function because the figure cannot be displayed
+%        properly with it. }}
+  \label{fig:inter:system}
+\end{figure}
+
+\subsection{Syntax, Well-formedness and Ordinary Types}
+\label{sec:inter:system}
+The syntax for this section mostly follows
+from \Cref{sec:union}, with the additional syntax given in
+\Cref{fig:inter:system}.
+%This system can trivially be extended with
+%more primitive types. We also have $Bool$ and $String$ types in our
+%Coq formalization.
+The most significant difference and novelty in this section
+is the addition of intersection types $[[A/\ B]]$ and
+an infinite set of nominal types. We use metavariable $[[P]]$ to stand for
+nominal types.
+Expressions are extended with
+a new expression ($[[new P]]$) to create instances of nominal
+types.  The expression $[[new P]]$ is also a value.
+Context $[[G]]$ stays the same as in \Cref{sec:union}.
+We add a new context $[[PG]]$, to track nominal types and their supertypes.
+For example, adding $[[P1]] \leq [[P2]]$ to $[[PG]]$ declares a new
+nominal type $[[P1]]$ that is a subtype of $[[P2]]$.
+For a well-formed context, the supertype $[[P2]]$ has to be declared before
+$[[P1]]$. We also allow to declare a new nominal type $[[P1]]$
+with $[[Top]]$ as
+its supertype by adding $[[P1]] \leq [[Top]]$ to $[[PG]]$.
+%% If $[[P]]$ is \emph{Person} and $[[A]]$
+%% is $[[Top]]$ then the concrete new entry in $[[PG]]$
+%% is \emph{Person <: $[[Top]]$}.
+%The middle part of
+%\Cref{fig:inter:system} shows ordinary types~\cite{davies2000intersection}.
+Metavariable $[[Aord]], [[Bord]]$ and $[[Cord]]$ ranges
+over ordinary types~\citep{davies2000intersection}.
+There are four kinds of ordinary types: integers, null, function types and nominal types.
+%Unlike \name, all well-formed nominal types $[[P]]$ are also ordinary types.
+Well-formed types and well-formedness of ordinary contexts $[[PG]]$
+are shown in \Cref{fig:inter:system}.
+
+\paragraph*{Remark on Nominal Types.}
+Note that our
+formulation of nominal types is simplified in two ways compared to
+languages like Java.
+Firstly, we do not consider arguments when
+building new expressions (i.e. we do not allow expressions like
+\lstinline{new Person("John")}).  Secondly, we also do not introduce
+class declarations, which would allow nominal types to be associated
+with method implementations. We follow a design choice for
+nominal types similar to Featherweight Java
+\citep{DBLP:journals/toplas/IgarashiPW01}.
+Featherweight Java uses a fixed size context for nominal types.
+Diamond inheritance is also not supported in Featherweight Java, and we follow
+that design choice as well.
+However, we believe that supporting diamond inheritance in our
+calculus is relatively easy.
+These simplifications keep the calculus
+simple, while capturing the essential features that matter
+for disjointness and the formalization of disjoint switches.
+Allowing for a more complete formulation of nominal types
+can be done in mostly standard ways.
+
+\begin{comment}
+In particular,
+We have to allow intersection type to be
+supertype of nominal types in the context $[[PG]]$
+to support diamond inheritance.
+Metatheory of the calculus will change accordingly.
+\end{comment}
+
+
+%Note that well-formedness definitions for $[[PG]]$ are shown in
+%appendix A in the supplementary material due to space constraints.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Distributive Subtyping
+%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Distributive Subtyping}
+Another interesting feature of this section is the addition of
+distributive subtyping to \name. Ceylon employs an enriched
+distributive subtyping relation~\citep{muehlboeck2018empowering} that
+is based on the B+ logic~\citep{routley1972semantics,van2000minimal}.
+To obtain an equivalent algorithmic formulation of subtyping,
+%% Technically speaking, the most challenging aspect of a formulation
+%% of the calculus with distributivity is the formulation of algorithmic subtyping.
+%% We mostly reuse the algorithmic subtyping relation by
+we employ the idea of \emph{splittable types}~\citep{huang2021distributing}, but extend that algorithm
+with the \lstinline{Null} type and nominal types.
+%% Therefore we must show that
+%% the extended algorithm is still sound, complete and decidable with respect to
+%% the corresponding declarative specification.
+
+\paragraph*{Distributive subtyping relation.}
+\Cref{fig:dist:dec:subtyping} shows a declarative version of distributive subtyping for
+\name with intersection and nominal types.
+Subtyping includes
+axioms for reflexivity (\rref{ds-refl}) and
+transitivity (\rref{ds-trans}). \Rref{ds-top,ds-bot,ds-arrow,ds-ora} have been
+discussed in \Cref{sec:union}.
+\Rref{ds-prim} states that a nominal type is a subtype of type $[[A]]$ if
+it is declared as subtype of $[[A]]$ in $[[PG]]$. Note that $[[A]]$ can either be
+a nominal type or $[[Top]]$ under a well-formed context $[[PG]]$.
+With the help of \rref{ds-trans}, the subtyping of primitive types can also be
+constructed indirectly, e.g.
+$[[P1]]\leq[[Top]],[[P2]]\leq[[P1]],[[P3]]\leq[[P2]][[|-]][[P3]]\leq[[P1]]$.
+Compared with the algorithmic formulation, having an explicit transitivity rule
+considerably simplifies the rules for nominal types.
+\Rref{ds-orb,ds-orc} state that a subpart of a union type is a subtype of whole union type.
+\Rref{ds-anda} states that a type $[[A]]$ is
+a subtype of the intersection of two types $[[B]]$ and $[[C]]$ only if
+$[[A]]$ is a subtype of both $[[B]]$ and $[[C]]$.
+\Rref{ds-andb,ds-andc} state that intersection type $[[A1 /\ A2]]$ is a subtype of both $[[A1]]$
+and $[[A2]]$ separately.
+\Rref{ds-distarr} distributes function types over intersection types.
+It states that $[[(A -> B1) /\ (A -> B2)]]$ is a subtype of
+$[[A -> (B1 /\ B2)]]$.
+\Rref{ds-distarru} states that $[[(A1 -> B) /\ (A2 -> B)]]$ is a subtype of
+$[[(A1 \/ A2) -> B]]$ type.
+\Rref{ds-distor} distributes intersections over unions.
+
+% The new rules for subtyping are shown in
+% \Cref{fig:inter:system}.
+% Subtyping now also takes $[[PG]]$.
+% \Rref{s-anda,s-andb,s-andc} are for newly
+% added intersection types. \Rref{s-anda} states that a type $[[A]]$ is
+% a subtype of the intersection of two types $[[B]]$ and $[[C]]$ only if
+% $[[A]]$ is a subtype of both $[[B]]$ and $[[C]]$. \Rref{s-andb,s-andc}
+% state that an intersection type $[[A /\ B]]$ is a subtype
+% of some type $[[C]]$ if either of its component types ($[[A]]$ or
+% $[[B]]$) is a subtype of $[[C]]$.
+%
+% The \rref{ps-p-refl} states that every nominal type is a subtype of itself.
+% \Rref{ps-p-in} states that $[[P2 <: P1]]$ if $[[P2]]$
+% is in subtypes of $[[P1]]$ under $[[PG]]$, i.e., $[[nominalsub PG P1]]$.
+% The definition of
+% $[[nominalsub PG A]]$ takes a type $[[A]]$
+% and a context $[[PG]]$ as input and returns a list of all
+% the nominal subtypes of $[[A]]$.
+% The notion $[[isnominalsub PG P A]]$ checks if $[[P]]$ is
+% declared as subtype of $[[A]]$ in $[[PG]]$.
+% The subtyping relation is reflexive and transitive.
+
+\begin{figure}[t]
+    \centering
+    \begin{small}
+      \drules[ds]{$ [[PG |- A <<: B]] $}{Declarative Subtyping with Distributivity}{refl,trans,arrow,prim,ora,orb,orc,anda,andb,andc,distarru,top,distor,bot,distarr}
+    \end{small}
+  \caption{Distributive subtyping for \name with intersection types and nominal types.}
+  \label{fig:dist:dec:subtyping}
+\end{figure}
+
+\begin{comment}
+\paragraph*{An example of distributive subtyping in Ceylon.}
+We show the use of distributive subtyping with the following Ceylon code snippet:
+
+\begin{lstlisting}[language=Scala]
+void do(<Integer & String> | Boolean val) { /* do something */ }
+\end{lstlisting}
+
+\noindent
+The function \emph{do} in above code snippet takes input value of type
+\lstinline{$[[(Int/\ String) \/ Bool]]$}. However, we cannot pass a value of
+type \lstinline{$[[(Int \/ Bool) /\ (String \/ Bool)]]$}
+to the function \emph{do}: we get a type error if we try
+to do that in a system with standard subtyping (without distributivity),
+as standard subtyping fails to identify that the value has a subtype of the
+expected argument type.
+
+Distributive subtyping is more expressive than standard subtyping.
+With distributivity of unions over intersections
+(and vice-versa), the type \lstinline{$[[(Int \/ Bool) /\ (String \/ Bool)]]$} is a subtype
+of \lstinline{$[[(Int /\ String) \/ Bool]]$} (in particular, by \rref{ds-distor}). As such
+with distributive subtyping, the following Ceylon program type-checks:
+
+\begin{lstlisting}[language=Scala]
+variable <Integer | Boolean> & <String | Boolean> x = true; do(x);
+\end{lstlisting}
+\end{comment}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Algorithmic Subtyping
+
+\begin{figure}[t]
+    \centering
+    \begin{small}
+      %% \ottdefnsOrdinaryIU
+      %% \ottdefnsSplit
+      \drules[as]{$ [[PG |- A < B]] $}{Algorithmic Subtyping with Distributivity}
+             {arrow,primEq,refl,primNeq,ora,top,orb,orc,anda,bot,andb,andc}
+    \end{small}
+    \caption{Algorithmic subtyping for \name with distributivity,
+      intersection and nominal types.}
+  \label{fig:dist:algo:subtyping}
+\end{figure}
+
+\paragraph*{Algorithmic Subtyping.}
+Distributive rules make it hard to eliminate the transitivity rule.
+Our algorithmic formulation of
+distributive subtyping is based on a formulation using splittable types
+by \cite{huang2021distributing}.
+The basic idea is to view the distributive rules as some expansion of
+intersection and union types.
+For example, \rref{ds-distarr} makes $[[A->B1/\B2]]$ and $[[(A->B1)/\(A->B2)]]$
+mutual subtypes.
+Thus $[[A->B1/\B2]]$ is treated like $[[(A->B1)/\(A->B2)]]$ in the three
+intersection-related rules \rref*{as-anda,as-andb,as-andc}.
+Here we use $[[split A B C]]$ to denote that type $[[A]]$ can be split into
+$[[B]]$ and $[[C]]$ (and therefore, $[[A]]$ is equivalent to $[[B/\C]]$)
+according to the procedure designed by Huang and Oliveira.
+Union and union-like types (e.g. $[[splitU (A1\/A2)/\B A1/\B A2/\B]]$) are handled in
+similar way in \rref{as-ora,as-orb,as-orc}.
+For further details of algorithmic subtyping we refer to their paper.
+
+\paragraph*{Subtyping Nominal Types.}
+However, Huang and Oliveira's algorithm does not account for
+\lstinline{Null} and nominal types. We add the nominal context $[[PG]]$ in
+the subtyping judgment and extend the subtyping algorithm with
+\lstinline{Null} and nominal types.
+Nominal types are not splittable, and their subtyping relation is
+defined by the transitive closure of the context.
+They are supertypes of $[[Bot]]$ and subtypes of $[[Top]]$, but not related
+with other primitive types like $[[Int]]$ and $[[Null]]$.  So for
+nominal types, we mainly focus on checking the subtyping relationship
+among them in our algorithm. Given a well-formed context, any nominal
+type $[[P]]$ appears only once in a subtype position as an explicit
+declaration for $[[P]]$, and its direct supertype, if is not $[[Top]]$,
+must be declared before $[[P]]$. Thus if $[[PG|-P1<:P2]]$ holds, either
+$[[P2]]$ is introduced before $[[P1]]$ in $[[PG]]$, or they are the same
+type, in which case the goal can be solved by \rref{as-refl}. For the other
+cases, we recursively search for $[[P1]]$ in all subtype positions of
+the context $[[PG]]$ (\rref{as-primNeq}).
+When we find $[[P1]]$, we check its direct supertype.
+If it is $[[Top]]$, no other nominal types can be supertypes of $[[P1]]$.
+So in \rref{as-primEq}, we only consider when the direct supertype is
+another primitive $[[P2]]$.  For $[[P3]]$ to be a supertype of
+$[[P1]]$, it must either equal to $[[P2]]$, or it is related to
+$[[P2]]$ by the smaller context.  In either case, we can prove
+that $[[P3]]$ is a supertype of the direct supertype of $[[P1]]$.
+We show that the algorithmic subtyping relation for \name with intersection types,
+nominal types and distributivity rules is reflexive and transitive:
+
+\begin{lemma}[Subtyping reflexivity]
+  $[[PG |- A <: A]]$
+\label{lemma:union:inter:sub:refl}
+\end{lemma}
+
+\begin{lemma}[Subtyping transitivity]
+  If $[[PG |- A <: B]]$ and $[[B <: C]]$ then $[[A <: C]]$
+\label{lemma:union:inter:sub:trans}
+\end{lemma}
+
+\paragraph{Inversion Lemmas for Type Soundness.}
+Having an algorithmic formulation of subtyping is useful to
+prove several inversion lemmas that are used in the type soundness proof.
+For instance, it allows us to prove the following lemma:
+
+\begin{lemma}[Inversion on Function Types]\label{lemma:arrow_inv}
+  If $[[PG |- A1->A2 < B1->B2]]$ then $[[PG |- B1 < A1]]$ and $[[PG |- A2 < B2]]$.
+\end{lemma}
+
+\noindent While the additional distributive rules make function types
+more flexible, they retain the contravariance of argument types and
+covariance of return types.
+%% the standard property : The subtyping relation of two function types is
+%% reversed for their argument types, and preserved for their return types.
+In addition, we show the formulation is sound and complete to the declarative
+subtyping and it is decidable whether a subtyping judgment holds under a
+given context.
+
+\begin{lemma}[Equivalence of subtyping]\label{lemma:subtyping-equiv} % Equivalence of declarative and algorithmic subtyping
+    $[[PG |- A <<: B]]$ if and only if $[[PG |- A < B]]$.
+\end{lemma}
+
+\begin{lemma}[Decidability of subtyping]\label{lemma:subtyping-decidable}
+    $[[PG |- A <<: B]]$ is decidable.
+\end{lemma}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%% Disjointness
+%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Disjointness Specification}
+\label{sec:inter:disj}
+Disjointness is another interesting aspect of the extension of \name.
+Unfortunately, Definition~\ref{def:union:disj} does not work with intersection
+types. In what follows, we first explain why Definition~\ref{def:union:disj} does not work, and then
+we show how to define disjointness in the presence of intersection types.
+
+%We employ updated disjointness for \name with intersection types as
+%discussed in \Cref{sec:union:discussion} and discuss the updated
+%disjointness in detail in this section.
+
+\paragraph*{Bottom-like types, intersection types and disjointness.}
+\noindent %Bottom-like types behave like $[[Bot]]$ type and are discussed in \Cref{sec:union:disj}.
+Recall that disjointness in \Cref{sec:union} (Definition~\ref{def:union:disj}) depends
+on bottom-like types, where two types are disjoint only if all their common
+subtypes are bottom-like. However, this definition no longer works with the
+addition of intersection types. According to the subtyping rule
+for intersection types, any two types have their intersection as one common subtype.
+For non-bottom-like types, their intersection is also not bottom-like. For
+example, type \lstinline{$[[Int]]$} and type \lstinline{$[[Bool]]$} now have a non-bottom like subtype
+\lstinline{$[[Int /\ Bool]]$}.
+In other words, the disjointness definition fails, since we
+can always find a common non-bottom-like subtype for any two (non-bottom-like)
+types.
+
+\begin{comment}
+Reader may think at this point to add intersection of non-overlapping types such as $[[Int /\ Bool]]$
+in bottom-like types to solve the problem. A trivial and intuitive approach to think of is:
+
+\begin{center}
+\drule[]{bl-andsub}
+\end{center}
+
+\noindent \Rref{bl-andsub} states that if two types $[[A]]$ and $[[B]]$
+are not subtypes of each other (i.e. non-overlapping) then intersection of
+such types $[[A /\ B]]$ is bottom-like.
+\Rref{bl-andsub} works for simple cases such as $[[Int]]$ and $[[Bool]]$.
+But it fails if  $[[A]]$ = $[[Int /\ Bool]]$ and
+$[[B]]$ = $[[Int /\ Bool]]$.
+Because $[[A]]$ ($[[Int /\ Bool]]$) and $[[B]]$ ($[[Int /\ Bool]]$) are subtypes
+of each other and are not bottom-like as per \rref{bl-andsub}.
+So, naive addition of \rref{bl-andsub} skips potential bottom-like types.
+Another alternative may be:
+
+\begin{center}
+\drule[]{bl-anddisj}
+\end{center}
+
+\noindent \Rref{bl-anddisj} states that if two types $[[A]]$ and $[[B]]$ are disjoint,
+then intersection of such types $[[A /\ B]]$ is bottom-like.
+But \rref{bl-anddisj} imposes additional complexities of mutually
+dependent definitions among disjointness and bottom-like.
+This makes completeness challenging or even impossible to prove.
+\end{comment}
+\paragraph*{A possible solution: the Ceylon approach.}
+A possible solution for this issue is to add a subtyping rule which makes intersections of
+disjoint types subtypes of $[[Bot]]$.
+
+\begin{center}
+\drule[]{s-disj}
+\end{center}
+%\bruno{Please use disjointness spec instead of disjoitness algorithm in the rule.}
+
+\noindent This rule is adopted by the Ceylon language~\citep{muehlboeck2018empowering}.
+With the \rref{s-disj}
+now the type \lstinline{$[[Int /\ Bool]]$} would be a bottom-like type, and the
+definition of disjointness used in Section~\ref{sec:union} could still work.
+The logic behind this rule is that if we interpret types as sets of values,
+and intersection as set intersection, then intersecting disjoint sets
+is the empty set. In other words, we would get a type that has no inhabitants.
+For instance the set of all integers is disjoint to the set of all booleans,
+and the intersection of those sets is empty.
+However we do not adopt the Ceylon solution here for two reasons:
+
+\begin{enumerate}
+
+\item \Rref{s-disj} complicates the system because
+  it adds a mutual dependency between subtyping and disjointness:
+  disjointness is defined in terms of subtyping, and subtyping now
+  uses disjointness as well in \rref{s-disj}. This creates important
+  challenges for the metatheory. In particular, the completeness proof
+  for disjointness becomes quite challenging.
+
+\item Additionally, the assumption that intersections of disjoint types
+  are equivalent to $[[Bot]]$ is too strong for some calculi with intersection
+  types. If a merge operator~\citep{reynolds1988preliminary} is allowed in the calculus,
+  intersection types can be inhabited with values (for example, in $\lambda_i$~\cite{oliveira2016disjoint},
+  the type \lstinline{$[[Int /\ Bool]]$} is inhabited by $[[1]] ,, \mathsf{true}$). Considering those
+  types bottom-like would lead to a problematic definition of
+  subtyping, since some bottom-like types (those based on disjoint types) would
+  be inhabited.
+
+\end{enumerate}
+
+\noindent For those reasons we adopt a different approach in \name.
+Nevertheless, in Section~\ref{sec:poly} we show that it is possible to
+create an extension of \name that includes (and in fact generalizes)
+the Ceylon-style \rref{s-disj}.
+
+\paragraph*{Disjointness based on ordinary types to the rescue.}
+To solve the problem with the disjointness specification, we resort to
+the alternative definition of disjointness presented in \Cref{sec:union:discussion}.
+Note that now the disjointness definition also contains $[[PG]]$ as an argument
+to account for nominal types.
+
+\begin{definition}[$[[/\]]$-Disjointness]
+\label{def:inter:disj}
+  % A $*_s$ B $\Coloneqq$ $\forall$ C, \ $[[ordinary C]]$ \ $\Longrightarrow$ \ $\neg([[C <: A]]$ and $[[C <: B]]$).
+  $[[PG]]$ $[[|-]]$ $[[A *s B]]$ $\Coloneqq$ $\nexists$ $[[Cord]]$, $[[PG |- Cord <: A]]$ and $[[PG |- Cord <: B]]$.
+\end{definition}
+
+Interestingly, while in Section~\ref{sec:union} such definition was
+equivalent to the definition using bottom-like types, this is no
+longer the case for \name with intersection types. To see why,
+consider again the types \lstinline{$[[Int]]$} and \lstinline{$[[Bool]]$}.
+\lstinline{$[[Int]]$} and
+\lstinline{$[[Bool]]$} do not share any common ordinary subtype. Therefore,
+\lstinline{$[[Int]]$} and \lstinline{$[[Bool]]$} are disjoint types according to
+Definition~\ref{def:inter:disj}.
+\begin{comment}
+We extend our previous example of type $[[Int]]$ and type $[[Bool]]$ and show how
+disjointness based upon ordinary types categorize them as disjoint types.
+An important observation at this point is common subtypes of type $[[Int]]$ and type $[[Bool]]$
+cannot include either $[[Int]]$ or $[[Bool]]$. Problematic types are the intersection types
+such as $[[Int /\ Bool]]$. We emphasize the point that ordinary types in \name does not contain
+intersection types. Further, all ordinary types are non-overlapping in \name.
+Therefore, now we say that
+two types are disjoint if they do not have any common ordinary subtype. $[[Int]]$ and $[[Bool]]$
+do not share any common ordinary subtype. Therefore, $[[Int]]$ and $[[Bool]]$ are disjoint types.
+\Cref{def:inter:disj} shows the declarative disjointness for \name with intersection types:
+
+
+\noindent Two types $[[A]]$ and $[[B]]$ are
+disjoint if the two types $[[A /\ B]]$ do
+not have any common ordinary subtype. For example, $[[Int]]$ and $[[A -> B]]$
+are disjoint types because there is no ordinary type that is a subtype
+of both types ($[[Int]]$ and $[[A -> B]]$).
+\Cref{def:inter:disj} is the same as
+\Cref{def:union:disj1}. However, while the \Cref{def:union:disj1} in \Cref{sec:union:discussion}
+is equivalent the definition of disjointness using bottom-like types (\Cref{def:union:disj}),
+in the calculus with intersection types that is no longer the case.
+\end{comment}
+% \baber{I think we can cut down exmaples from this section to save space.
+% We already have some
+% examples in section 3. Although the disjointness technique is different.}
+We further illustrate
+Definition~\ref{def:inter:disj} with a few concrete examples:
+%(Note that $\boldsymbol{A}$ and $\boldsymbol{B}$
+%are placeholders for actual types)
+
+\begin{enumerate}
+  \item $\boldsymbol{A = [[Int]], \ B = \ [[Int -> Bool]]:}$ Since there is no ordinary type that is a subtype of both $[[Int]]$ and $[[Int -> Bool]]$,
+        the two types are disjoint.
+  \item $\boldsymbol{A = [[Int \/ Bool]], \ B = \ [[Bot]]:}$ Since there is no ordinary type that is a subtype of both \lstinline{$[[Int \/ Bool]]$} and $[[Bot]]$,
+    \lstinline{$[[Int \/ Bool]]$} and $[[Bot]]$ are disjoint types.
+    In general, the $[[Bot]]$ type is disjoint to all types because $[[Bot]]$ does not
+    have any ordinary subtype.
+ \item $\boldsymbol{A = [[Int /\ (Int -> Bool)]], \ B = \ [[Int]]:}$ There is no ordinary type that is a subtype of both $[[Int /\ (Int -> Bool)]]$ and $[[Int]]$.
+       Therefore, $[[Int /\ (Int -> Bool)]]$ and $[[Int]]$ are disjoint types.
+       In general, an intersection of two disjoint types ($[[Int /\ (Int -> Bool)]]$ in this case)
+       is always disjoint to all types.
+  \item $\boldsymbol{A = [[Int /\ Bool]], \ B = \ [[Int \/ Bool]]:}$ There is no ordinary type that is a subtype of both \lstinline{$[[Int /\ Bool]]$} and \lstinline{$[[Int \/ Bool]]$}.
+        Therefore, \lstinline{$[[Int /\ Bool]]$} and \lstinline{$[[Int \/ Bool]]$} are disjoint types.
+        In general, an intersection of two disjoint types (\lstinline{$[[Int /\ Bool]]$} in this case)
+        is always disjoint to all types.
+  \item $\boldsymbol{A = [[Int]], \ B = \ [[Top]]:}$ In this case, $[[Int]]$ and $[[Top]]$ share a common ordinary subtype which is $[[Int]]$.
+    Therefore, $[[Int]]$ and $[[Top]]$ are not disjoint types.
+     $[[Top]]$ overlaps with any other types.
+\end{enumerate}
+
+%The
+%reason we did not write intersection in \Cref{def:union:disj1} is
+%because we do not have intersection types in \name discussed in
+%\Cref{sec:union}.
+%Updated disjointness specifications are now
+%represented as $[[A *s B]]$ and not $[[A]]$ $*_{s1}$ $[[B]]$.
+
+\subsection{Algorithmic Disjointness}
+
+The change in the disjointness specification has a significant impact on an
+algorithmic formulation. In particular, it is not obvious at all how to adapt
+the algorithmic formulation in \Cref{fig:union:disj-typ}. To obtain a
+sound, complete and decidable formulation of disjointness, we employ the novel
+notion of \emph{lowest ordinary subtypes}.
+
+\begin{figure}[t]
+    % {\renewcommand{\arraystretch}{1.2}
+    % \begin{tabular}{|lcl|}
+    %   \multicolumn{3}{c}{Lowest Ordinary Subtypes (LOS) $[[findsubtypes A]]$} \\
+    %   \hline
+    %  $[[findsubtypes Top]]$ & = & $\{ [[Int]], [[Top -> Bot]], [[Null]]\}$  \\
+    %  $[[findsubtypes Bot]]$ & = & $\{\}$  \\
+    %  $[[findsubtypes Int]]$ & = & $\{ [[Int]] \}$  \\
+    %  $[[findsubtypes A -> B]]$ & = & $\{ [[Top -> Bot]] \}$  \\
+    %  $[[findsubtypes A \/ B]]$ & = & $ [[findsubtypes A]] \cup [[findsubtypes B]] $\\
+    %  $[[findsubtypes A /\ B]]$ & = & $ [[findsubtypes A]] \cap [[findsubtypes B]] $\\
+    %  $[[findsubtypes Null]]$ & = & $\{ [[Null]] \}$  \\
+    %   \hline
+    % \end{tabular} }
+
+\begin{center}
+    {\renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|lcl|}
+     \multicolumn{3}{c}{Lowest Ordinary Subtypes (LOS) $[[findsubtypesp PG A]]$} \\
+     \hline
+     $[[findsubtypesp PG Top]]$ & = & $\{ [[Int]], [[Top -> Bot]], [[Null]]\}$ $\cup$ dom $[[PG]]$  \\
+     $[[findsubtypesp PG Bot]]$ & = & $\{\}$  \\
+     $[[findsubtypesp PG Int]]$ & = & $\{[[Int]]\}$  \\
+     $[[findsubtypesp PG A -> B]]$ & = & $\{[[Top -> Bot]]\}$  \\
+     $[[findsubtypesp PG A \/ B]]$ & = & $[[findsubtypesp PG A]]$ $\cup$ $[[findsubtypesp PG B]]$  \\
+     $[[findsubtypesp PG A /\ B]]$ & = & $[[findsubtypesp PG A]]$ $\cap$ $[[findsubtypesp PG B]]$  \\
+     $[[findsubtypesp PG Null]]$ & = & $\{ [[Null]]\}$  \\
+     $[[findsubtypesp PG P]]$ & = & $\{[[P]]\}$ $\cup$ $[[nominalsub PG P]]$\\
+     \hline
+    \end{tabular} }
+    %\drule[]{ptyp-prim}
+
+    \begin{tabular}{c}
+      {\renewcommand{\arraystretch}{1.5}
+       \begin{tabular}{|lll|}
+        \multicolumn{3}{c}{Nominal Subtypes \fbox{$[[nominalsub PG A]]$}} \\[0.8mm]
+        \hline
+        $[[nominalsub [] A]]$ & = & $\{\}$ \\
+        \multirow{2}{*}{$[[nominalsub (PG', P <: B) A]]$} & \ldelim\{{2}{*}[=] & $\{[[P]]\} \cup [[nominalsub PG' A]]$ {\textbf{if}} $[[isnominalsub PG P A]]$ \\
+                                                               & & $[[nominalsub PG' A]]$ \textbf{otherwise} \\
+        \hline
+        \end{tabular} }
+    \end{tabular}
+\end{center}
+
+    % \hspace{1cm} {\renewcommand{\arraystretch}{}
+    % \begin{tabular}{c}
+    %    \drule[]{ptyp-prim}  \\
+    % \end{tabular} }
+
+    %\hspace{1cm} \drule[]{ptyp-and}
+    %\hspace{1cm} \drule[]{ptyp-prim}
+    %\drules[ptyp]{$ [[PG; G |- e : A]] $}{Typing with Nominal Types}{prim}
+
+  \caption{Lowest ordinary subtypes function and additional typing rule for \name with intersection types and nominal types.}
+  \label{fig:inter:los}
+\end{figure}
+
+
+\paragraph*{Lowest ordinary subtypes ($[[findsubtypesp PG A]]$).}
+\Cref{fig:inter:los} shows the definition of
+\emph{lowest ordinary subtypes} (LOS) ($[[findsubtypesp PG A]]$).
+LOS is defined as a function which
+returns a set of ordinary subtypes of the given input type.
+No ordinary type is a subtype of $[[Bot]]$. The only ordinary
+subtype of $[[Int]]$ is $[[Int]]$ itself. The function case is
+interesting. Since no two functions are disjoint in the calculus
+proposed in this section, the case for function types $[[A -> B]]$ returns $[[Top
+    -> Bot]]$. This type is the least ordinary function type, which is a subtype
+of all function types.
+Lowest ordinary subtypes of $[[Top]]$ are $[[Int]]$, $[[Top -> Bot]]$,
+$[[Null]]$ and all the nominal types defined in $[[PG]]$.
+In the case of union types $[[A \/ B]]$, the
+algorithm collects the LOS of $[[A]]$ and $[[B]]$ and returns the union of the
+two sets. For intersection types $[[A /\ B]]$
+the algorithm collects the LOS of $[[A]]$ and $[[B]]$
+and returns the intersection of the two sets.
+The lowest ordinary subtype of $[[Null]]$ is $[[Null]]$ itself.
+Finally, the LOS of $[[P]]$ is the union of $[[P]]$ itself with all subtypes
+of $[[P]]$ defined in $[[PG]]$.
+Note that LOS is defined as a structurally recursive function and therefore
+its decidability is immediate.
+
+\paragraph*{Algorithmic disjointness.}
+%With LOS, it is straightforward to give an algorithmic formulation of
+%disjointness:
+With LOS, an algorithmic formulation of
+disjointness is straightforward:
+%Since we gave a new definition for declarative disjointness.
+%Therefore, we define a new algorithm for disjointness as shown in \Cref{def:inter:ad}.
+
+\begin{definition}
+\label{def:inter:ad}
+%\texttt{`abc \textasciigrave abc}
+  %A $*_a$ B $\Coloneqq$  $ [[findsubtypes A]] \cap [[findsubtypes B]] $ = $\{\}$.
+  $[[PG]]$ $[[|-]]$ $[[A * B]]$ $\Coloneqq$  $ [[findsubtypesp PG A]] \cap [[findsubtypesp PG B]] $ = $\{\}$.
+\end{definition}
+
+\noindent The algorithmic formulation of disjointness in
+Definition~\ref{def:inter:ad} states that two
+types $[[A]]$ and $[[B]]$ are disjoint under the context $[[PG]]$
+if they do not have any common lowest ordinary subtypes.
+In other words, the
+set intersection of $[[findsubtypesp PG A]]$ and $[[findsubtypesp PG B]]$ is the empty set.
+%In simple words,
+%two types $[[A]]$ and $[[B]]$ are disjoint if they do not share any common ordinary subtype because
+%$FindSubTypes$ ($[[findsubtypes A]]$) returns a set of ordinary subtypes.
+Note that this algorithm is naturally very close to Definition~\ref{def:inter:disj}.
+\begin{comment}
+We illustrate \Cref{def:inter:ad} with a few examples:
+
+\begin{enumerate}
+  \item $\boldsymbol{A = [[Int]], \ B = \ [[A -> B]]:}$ \\
+        $[[findsubtypes Int]]$ returns \{$[[Int]]$\} and $[[findsubtypes A -> B]]$ returns
+        \{$[[Top -> Bot]]$\}. Set intersection of \{$[[Int]]$\} and \{$[[Top -> Bot]]$\} is
+        empty set \{\}. Therefore, $[[Int]]$ and $[[A -> B]]$ are disjoint types.
+  \item $\boldsymbol{A = [[Int]], \ B = \ [[Bot]]:}$ \\
+        $[[findsubtypes Int]]$ returns \{$[[Int]]$\} and $[[findsubtypes Bot]]$ returns
+        \{\}. Set intersection of \{$[[Int]]$\} and \{\} is
+        empty set \{\}. Therefore, $[[Int]]$ and $[[Bot]]$ are disjoint types.
+        In general, type $[[Bot]]$ is disjoint to all types because $[[findsubtypes Bot]]$
+        will always return \{\} and intersection of \{\} with all other sets is \{\}.
+  \item $\boldsymbol{A = [[Int /\ A -> B]], \ B = \ [[Int]]:}$ \\
+        $[[findsubtypes Int /\ A -> B]]$ returns \{\} and $[[findsubtypes Int]]$ returns
+        \{$[[Int]]$\}. Set intersection of \{\} and \{$[[Int]]$\} is
+        empty set \{\}. Therefore, $[[Int /\ A -> B]]$ and $[[Int]]$ are disjoint types.
+        In general, intersection type of two disjoint types which is $[[Int /\ A -> B]]$ in this case,
+        is always disjoint to all types.
+  \item $\boldsymbol{A = [[Int]], \ B = \ [[Top]]:}$ \\
+        $[[findsubtypes Int]]$ returns \{$[[Int]]$\} and $[[findsubtypes Top]]$ returns
+        \{$[[Int]]$, $[[Top -> Bot]]$\}.
+        Set intersection of \{$[[Int]]$\} and \{$[[Int]]$, $[[Top -> Bot]]$\} is
+        set \{$[[Int]]$\}. Therefore, $[[Int]]$ and $[[Top]]$ are not disjoint types.
+\end{enumerate}
+\end{comment}
+
+\paragraph*{Soundness and completeness of algorithmic disjointness.}
+Next, we show that disjointness algorithm is sound and complete with respect
+to disjointness specifications (\Cref{lemma:inter:disj-sound}).
+Soundness and completeness of LOS are essential to
+prove \Cref{lemma:inter:disj-sound}. Both of these properties
+are shown in Lemma~\ref{lemma:inter:findsubtypes-sound}
+and Lemma~\ref{lemma:inter:findsubtypes-complete} respectively.
+
+%\snow{I feel these two lemmas are important to prove the soundness and completeness
+%  of disjointness algorithm.}
+
+\begin{theorem}[Disjointness Equivalence]
+  \ $[[PG]]$ $[[|-]]$ $[[A * B]]$ if and only if $[[PG]]$ $[[|-]]$ $[[A *s B]]$.
+\label{lemma:inter:disj-sound}
+\end{theorem}
+
+\begin{lemma}[Soundness of $[[findsubtypesp PG A]]$]
+  $\forall$ well-formed $[[PG]]$ and $[[A]]$ and $[[B]]$ that are well-formed under $[[PG]]$,
+  if $[[B]] \in [[findsubtypesp PG A]]$, then $[[PG |- B <: A]]$.
+\label{lemma:inter:findsubtypes-sound}
+\end{lemma}
+
+\begin{lemma}[Completeness of $[[findsubtypesp PG A]]$]
+  $\forall$ $[[A]]$ $[[Bord]]$, if $[[PG |- Bord <: A]]$,
+  then $[[Bord]] \in [[findsubtypesp PG A]]$,
+  or $[[Bord]]$ is an arrow type and $[[Top->Bot]] \in [[findsubtypesp PG A]]$.
+\label{lemma:inter:findsubtypes-complete}
+\end{lemma}
+
+%We prove that the algorithmic disjointness is sound and complete with respect to
+%the declarative specification.
+
+% \begin{lemma}[Disjointness Completeness]
+%   If \ $[[A *s B]]$ \ then \ $[[A * B]]$.
+% \label{lemma:inter:disj-complete}
+% \end{lemma}
+
+\subsection{Typing, Semantics and Metatheory}
+
+Both typing and the operational semantics are parameterized by the nominal context $[[PG]]$.
+The typing rules are extended with
+%an introduction rule for intersection types
+%\rref{ptyp-and} and typing
+a rule for nominal types \rref{ptyp-prim}
+as shown:
+
+\begin{center}
+\drule[]{ptyp-prim}
+\end{center}
+
+% \Rref{typ-and} states that if an expression $[[e]]$ has type $[[A]]$
+% and $[[e]]$ has type $[[B]]$, then $[[e]]$ has type $[[A /\ B]]$.
+% This rule increases the expressiveness of \name upto some extent.
+% It allows a kind of intersection polymorphism.
+% For example, an identity function $[[\x.x]]$ can have multiple types
+% $[[\x.x : Int -> Int /\ Bool -> Bool]]$.
+% Additionally, typing relation is also extended with $[[PG]]$.
+The typing \rref{ptyp-prim} states that under a well-formed
+context $[[PG]]$ and well-formed type $[[P]]$,
+$[[new P]]$ has type $[[P]]$.
+No additional reduction rule is required
+because $[[new P]]$ is a value. However, the \rref{step-switchl,step-switchr}
+require $\Delta$ because they do a subtyping check. We illustrate
+the updated \rref{step-switchl} next:
+
+\begin{center}
+\drule[]{nstep-switchl}
+\end{center}
+
+\noindent \Rref{step-switchr} is updated similarly as: 
+
+\begin{center}
+\drule[]{nstep-switchr}
+\end{center}
+
+\noindent All the other rules
+are essentially the same as in Section~\ref{sec:union}, modulo
+the extra nominal context $\Delta$.
+
+\paragraph{Example.}
+Assuming a context $\Delta = \mathsf{Person} \leq [[Top]],
+\mathsf{Student} \leq \mathsf{Person}, \mathsf{Robot} \leq [[Top]]$,
+$\mathsf{y}$ : $\mathsf{Person}$ | $\mathsf{Robot}$ and $\mathsf{x}$ : $\mathsf{Student}$,
+we could write the following two switches:
+
+\vspace{1mm}
+
+%\bruno{Put code side-by-side to save space.}
+%\beber{Done.}
+
+\noindent\begin{minipage}{.45\textwidth}
+\begin{lstlisting}[language=Scala,frame=tlrb]
+switch(y)     // Accepted!
+  (z : Person)  -> false
+  (z : Robot)   -> true
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}{.45\textwidth}
+\begin{lstlisting}[language=Scala,frame=tlrb]
+switch (x)    // Rejected!
+  (z : Person)  -> false
+  (z : Student) -> true
+\end{lstlisting}
+\end{minipage}
+
+\noindent In the above code, the first switch, using \lstinline{y} is accepted, while
+the second one (using \lstinline{x}) is rejected because the types overlap in that case.
+
+% \baber{need to show the complete typing and reduction rules for this section.}
+
+\paragraph{Key Properties.}
+We proved that \name with intersection types, nominal types
+and subtyping distributivity
+preserves type soundness and determinism.
+
+\begin{comment}
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[typ]{$ [[G |- e : A]] $}{Additional typing rule for intersection types}{and}
+  \end{small}
+  \caption{Additional typing rule for \name with intersection types.}
+  \label{fig:inter:typ}
+\end{figure}
+\end{comment}
+
+%\bruno{add determinism}
+
+\begin{theorem}[Type Preservation]
+\label{lemma:inter:preservation}
+  If \ $[[PG , G |- e : A]]$ and $[[PG |- e --> e']]$ then $[[PG , G |- e' : A]]$.
+\end{theorem}
+
+\begin{theorem}[Progress]
+\label{lemma:inter:progress}
+If \ $[[PG , [] |- e : A]]$ then either $[[e]]$ is a value;
+or $[[e]]$ can take a step to $[[e']]$.
+\end{theorem}
+
+\begin{theorem}[Determinism]
+\label{lemma:inter:determinism}
+  If \ $[[PG , G |- e : A]]$ and \ $[[PG |- e --> e1]]$ and \ $[[PG |- e --> e2]]$ then $[[e1]]$ = $[[e2]]$.
+\end{theorem}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Figures below may be removed
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \begin{tabular}{lrcl} \toprule
+%       Type & $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[A \/ B]] \mid [[Null]] $ \\
+%       Expr & $[[e]]$ & $\Coloneqq$ & $[[x]] \mid [[i]] \mid [[\x.e]] \mid [[e1 e2]] \mid [[switch e A e1 B e2]] \mid [[null]]$\\
+%       Value & $[[v]]$ & $\Coloneqq$ & $[[i]] \mid [[\x.e]] \mid [[null]] $\\
+%       Context & $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]]$ \\
+%       \bottomrule
+%     \end{tabular}
+%   \end{small}
+%   \begin{small}
+%     \centering
+%     \drules[s]{$ [[A <: B ]] $}{Subtyping}{top, null, int, arrow, bot, ora, orb, orc}
+%   \end{small}
+%   \caption{Syntax and subtyping for \name.}
+%   \label{fig:union:syntax}
+% \end{figure}
+
+% %---------------------------------------------------------------------------%%
+
+
+
+
+% %---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \drules[bl]{$[[botlike A]]$}{Bottom-Like Types}{bot, or}
+%   \end{small}
+%   \begin{small}
+%     \centering
+%     \drules[ad]{$[[A * B]]$}{Algorithmic Disjointness}{btmr, btml, intl, intr, null-intl, null-intr, null-funl, null-funr, orl, orr}
+%   \end{small}
+%   \begin{small}
+%     \centering
+%     \drules[typ]{$ [[G |- e : A]] $}{Typing}{int, null, sub, app, abs, var, switch}
+%   \end{small}
+%   \caption{Bottom-like types, algorithmic disjointness and typing for \name.}
+%   \label{fig:union:disj-typ}
+% \end{figure}
+
+% %---------------------------------------------------------------------------%%
+
+
+
+% %---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \drules[step]{$[[e --> e']]$}{Operational Semantics}{appl, appr, beta, switch}
+%   \end{small}
+%   \begin{center}
+%   \vspace{-2mm}
+%   {\renewcommand{\arraystretch}{1.2}
+%     \begin{tabular}{p{9.3cm}}
+%       \drule[]{step-switchl} \\
+%       \drule[]{step-switchr} \\
+%     \end{tabular} }
+%     %\vspace{-5mm}
+%   {\renewcommand{\arraystretch}{1.2}
+%     \begin{tabular}{|lcl|}
+%       \multicolumn{3}{c}{Approximate Type $[[dyntype v]]$} \\
+%       \hline
+%       $[[dyntype i]]$ & = & $[[Int]]$ \\
+%       $[[dyntype \x.e]]$ & = & $[[Top -> Bot]]$ \\
+%       $[[dyntype null]]$ & = & $[[Null]]$ \\
+%       \hline
+%     \end{tabular} }
+%     \end{center}
+%   \caption{Operational semantics and approximate type definitions for \name.}
+%   \label{fig:union:os}
+% \end{figure}
+
+% %---------------------------------------------------------------------------%%
+
+
+
+% %---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%     \centering
+%     \begin{tabular}{lcl} \toprule
+%       $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ ... \mid [[A /\ B]] \mid [[P]] $ \\
+%       $[[Aord]], [[Bord]], [[Cord]]$ & $\Coloneqq$ & $ [[Int]] \mid [[Null]] \mid [[A->B]] \mid [[P]] $ \\
+%       $[[e]]$ & $\Coloneqq$ & $ ... \mid [[new P]]$\\
+%       $[[v]]$ & $\Coloneqq$ & $ ... \mid [[new P]] $\\
+%       $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]]$ \\
+%       $[[PG]]$ & $\Coloneqq$ & $ \cdot \mid [[PG , P1 <: P2]] \mid [[PG , P <: Top]]$ \\
+%       \bottomrule
+%     \end{tabular}
+%     %\vspace{1cm}
+%     %\drules[s]{$ [[A <: B ]] $}{Additional Subtyping Rules}{anda, andb, andc}
+%     %\drules[ps]{$ [[PG |- A <: B]] $}{Additional subtyping rules}{p-in, anda, p-refl, andb, andc}
+%     %\drules[ord]{$[[ordinary A]]$}{Ordinary Types}{int, arrow, null}
+% 	\begin{small}
+% 	    \drules[wft]{$ [[wft PG A]] $}{Well-formed Types}{top, bot, int, null, arrow, prim, or, and}
+% 	    \drules[okp]{$ [[okp PG]] $}{Well-formed Nominal Contexts}{empty,cons,sub}
+% 	\end{small}
+% \end{figure}
+
+% %---------------------------------------------------------------------------%%
+
+
+
+% %---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%     \centering
+%     \begin{small}
+%       \drules[ds]{$ [[PG |- A <<: B]] $}{Declarative Subtyping with Distributivity}{refl,trans,arrow,prim,ora,orb,orc,anda,andb,andc,distarru,top,distor,bot,distarr}
+%     \end{small}
+%   \caption{Distributive subtyping for \name with intersection types and nominal types.}
+%   \label{fig:dist:dec:subtyping}
+% \end{figure}
+
+% %---------------------------------------------------------------------------%%
+
+
+
+% %---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%     \centering
+%     \begin{small}
+%       %% \ottdefnsOrdinaryIU
+%       %% \ottdefnsSplit
+%       \drules[as]{$ [[PG |- A < B]] $}{Algorithmic Subtyping with Distributivity}
+%              {arrow,primEq,refl,primNeq,ora,top,orb,orc,anda,bot,andb,andc}
+%     \end{small}
+%     \caption{Algorithmic subtyping for \name with distributivity,
+%       intersection and nominal types.}
+%   \label{fig:dist:algo:subtyping}
+% \end{figure}
+
+
+
+%---------------------------------------------------------------------------%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%% Polymorphism and Empty Types
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%---------------------------------------------------------------------------%%
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Switches with Disjoint Polymorphism and Empty Types}
+\label{sec:poly}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The calculus introduced in Section~\ref{sec:union} is
+a simple foundational lambda calculus with
+union types, similar to prior work on union
+types and their elimination forms
+\citep{benzaken2003cduce,dunfield2014elaborating,castagna:settheoretic}.
+In Section~\ref{sec:inter} we extend \name with various interesting
+features including intersection types, nominal types and
+subtyping distributivity, inspired by Ceylon, which has similar features.
+% are simple foundational lambda calculus with
+% intersection and union types, similar to prior work on union types and their elimination forms
+%\cite{benzaken2003cduce,dunfield2014elaborating,castagna:settheoretic}.
+%\bruno{references to work with elimination forms to union types}.
+%\baber{done.}
+In this section we discuss two more practical extensions:
+
+\begin{itemize}
+
+\item \textbf{Disjoint Polymorphism:} The first extension is an
+extension with a form of \emph{disjoint polymorphism}~\citep{alpuimdisjoint}, which allows
+the specification of disjointness constraints for type variables. Although Ceylon supports
+polymorphism, it does not support disjoint polymorphism. The extension with disjoint
+polymorphism is inspired by the work on disjoint intersection types, where disjoint polymorphism
+has been proposed to account for disjointness in a polymorphic language.
+
+\item \textbf{A Special Subtyping Rule for Empty Types:}
+The second extension that we discuss is an alternative subtyping formulation with
+a special subtyping rule for empty types, which follows the Ceylon approach.
+
+\end{itemize}
+
+Note that both extensions above have also been formalized in Coq and proved type-sound
+and deterministic. In addition, we also have a brief discussion about implementation considerations.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Polymorphism
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{Disjoint Polymorphism}
+\label{sec:discussion:poly}
+% Polymorphism is an essential feature, supported in almost all the modern
+% programming languages. The word polymorphism can map to three
+% important concepts in programming languages. This includes
+% subtype polymorphism, ad-hoc polymorphism 
+% \citep{castagna1995calculus, cardelli1985understanding, wadler1989make} and 
+% parametric polymorphism \citep{cardelli1985understanding, canning1989f}. 
+% In our current setting polymorphism refers to
+% parametric polymorphism.
+% %We already studied \name with subtype polymorphism in
+% %previous sections.
+% %Type-based switch construct provides a form of ad-hoc polymorphism.
+% It enables generic programming by abstracting over types not just terms.
+% Parametric polymorphism lies at the core of most functional programming languages
+% including Haskell and Ocaml among others. The following programming example
+% illustrates parametric polymorphism:
+% %\baber{Programming example using parametric polymorphism.}
+
+% \begin{lstlisting}[language=Scala]
+% Int length [T] (l Array[T]) {}
+% \end{lstlisting}
+
+% \noindent length is a generic function which calculates the size
+% of array of any type. It does not depend on the type of the
+% elements in an array, it only cares about the number of elements.
+% In a programming language where parametric polymorphism is not
+% supported one may have to write multiple length functions dealing
+% with one type each. Parametric polymorphism can further be 
+% refined using bounded quantification
+% to restrict the instantiation of type variables to be subtype of
+% certain types. For example:
+
+% \begin{lstlisting}[mathescape,language=Scala]
+% Int length$'$ [T <: Number] (l Array[T]) {}
+% \end{lstlisting}
+
+% \noindent length$'$ will type-check as long as the type variable T 
+% is a subtype of Number.
+
+%\paragraph{Disjoint Polymorphism.} 
+In this section we discuss an extension of \name with parametric polymorphism
+along with intersection and nominal types. The interesting aspect about this
+extension is the presence of disjointness constraints.
+%Parametric polymorphism is similar to generics in Java. It allows to abstract
+%over types, not just terms.
+For example, in \name with polymorphism a polymorphic disjoint switch such as:
+$[[G, a * Int]]$ $[[|-]]$ $[[switch e Int true a false]]$ is accepted. It is safe to use
+$[[Int]]$ and $[[a]]$ in alternative branches in a switch in this example.
+The disjointness constraint in the context ($[[G, a * Int]]$) on type variable $[[a]]$
+ensures that $[[a]]$ must only be instantiated with types disjoint
+to $[[Int]]$. Thus an instantiation of $[[a]]$ with $[[Null]]$  or $[[A -> B]]$
+is allowed. Whereas, an instantiation of $[[a]]$ with $[[Int]]$ is rejected by the type system.
+
+
+\begin{figure}[t]
+  \begin{small}
+    % \begin{minipage}[t]{0.55\linewidth}
+      \begin{center}
+        \begin{tabular}{rcl}
+          \toprule
+          $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[Null]] \mid [[A \/ B]] \mid [[A /\ B]] \mid [[P]] \mid \mathcolorbox{lightgray}{[[a]]} ~ \mid ~ \mathcolorbox{lightgray}{[[\A . B]]} $ \\
+          %$[[Aord]], [[Bord]], [[Cord]]$ & $\Coloneqq$ & $ [[Int]] \mid [[Null]] \mid [[A->B]] \mid [[P]] \mid \mathcolorbox{lightgray}{[[\A . B]]} $ \\
+          $[[e]]$ & $\Coloneqq$ & $ [[x]] \mid [[i]] \mid [[\x.e]] \mid [[e1 e2]] \mid [[switch e A e1 B e2]] \mid [[null]] \mid [[new P]] \mid $ \\
+                & & $ \mathcolorbox{lightgray}{[[e A]]} ~ \mid ~ \mathcolorbox{lightgray}{[[\ A . e]]} $\\
+          $[[v]]$ & $\Coloneqq$ & $ [[i]] \mid [[\x.e]] \mid [[null]] \mid [[new P]] \mid ~ \mathcolorbox{lightgray}{[[\ A . e]]} $\\
+          $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]] \mid ~ \mathcolorbox{lightgray}{[[G , a * A]]} $ \\
+          $[[PG]]$ & $\Coloneqq$ & $ \cdot \mid [[PG , P <~ A]]$ \\
+          % PContext & $[[PG]]$ & $\Coloneqq$ & $ \cdot \mid [[PG , P <: A]]$ \\
+         \mathcolorbox{lightgray}{$[[GT]]$} & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[Null]] \mid [[A -> B]] \mid [[GT1 \/ GT2]] \mid [[GT1 /\ GT2]] \mid [[\ GT . B]] $ \\
+          \bottomrule
+        \end{tabular}
+      \end{center}
+   % \end{minipage}
+   % \begin{minipage}[t]{0.43\linewidth}
+
+        \begin{center}
+       {\renewcommand{\arraystretch}{1.1}
+         \begin{tabular}{|lcl|}
+           \hline
+           \multicolumn{3}{|c|}{Lowest Ordinary Subtypes (LOS) $[[findsubpoly PG G A]]$} \\
+           \hline
+           $[[findsubpoly PG G Top]]$ & = & $\{ [[Int]], [[Top -> Bot]], [[Null]]\}$ $\cup$ dom $[[PG]]$  \\
+           $[[findsubpoly PG G Bot]]$ & = & $\{\}$  \\
+           $[[findsubpoly PG G Int]]$ & = & $\{[[Int]]\}$  \\
+           $[[findsubpoly PG G A -> B]]$ & = & $\{[[Top -> Bot]]\}$  \\
+           $[[findsubpoly PG G A \/ B]]$ & = & $[[findsubpoly PG G A]]$ $\cup$ $[[findsubpoly PG G B]]$  \\
+           $[[findsubpoly PG G A /\ B]]$ & = & $[[findsubpoly PG G A]]$ $\cap$ $[[findsubpoly PG G B]]$  \\
+           $[[findsubpoly PG G Null]]$ & = & $\{ [[Null]]\}$  \\
+           $[[findsubpoly PG G P]]$ & = & $\{[[P]]\}$ $\cup$ $[[nominalsub PG P]]$\\
+           $[[findsubpoly PG G \ GT . B]]$ & = & $\{[[\ Bot . Bot]]\}$ \\
+           $[[findsubpoly PG G a]]$ & = & ($[[findsubpoly PG G Top]]$) - ($[[findsubpoly PG G GT]]$) \\
+            &   &  where $[[a * GT in G]]$ \\
+            \hline
+        \end{tabular} }
+        \end{center}
+   % \end{minipage}
+
+%    \drules[polys]{$[[PG ; G |- A <: B]]$}{Subtyping}{top, int, bot, unit, arrow, ora, orb, orc, anda, andb, andc, tvar, all, prefl, pin}
+
+
+%    \drules[ptyp]{$ [[PG ; G |- e : A]] $}{Additional typing rules}{tap, tabs}
+
+%    \drules[polystep]{$ [[PG ; G |- e --> e']] $}{Additional reduction rules}{tappl, tapp}
+
+  \end{small}
+  \caption{Syntax, additional typing, subtyping, and reduction rules for \name with polymorphism.}
+  \label{fig:discussion:poly}
+\end{figure}
+
+\paragraph*{Syntax.}
+%\baber{highlight differences in figure.}
+\Cref{fig:discussion:poly} shows the extension in the syntax of \name
+with polymorphism.
+Types are extended with type variables $[[a]]$ and
+disjoint quantifiers $[[\GT . B]]$.
+%$[[\GT . B]]$ is also an ordinary type.
+The reader can think of this extension in the context of
+bounded quantification \citep{cardelli1985understanding, canning1989f} where
+bounded quantifiers ($[[\ A bq B]]$) are replaced by
+disjoint quantifiers ($[[\GT . B]]$).
+Bounded quantification imposes a subtyping restriction on type variables,
+whereas disjoint quantification imposes disjointness restriction on type variables.
+Disjoint quantification only allows the instantiation of disjoint types.
+For example, $[[\ Int \/ Bool bq a]]$ allows $[[a]]$ to be instantiated only
+with subtypes of $[[Int \/Bool]]$ and restricts all other types.
+Whereas, $[[\ Int \/ Bool . a]]$ restricts all the instantiations of
+$[[a]]$ which share an ordinary subtype with $[[Int \/ Bool]]$. In other words,
+the permitted instantiations of $[[a]]$ are the types disjoint to $[[Int \/ Bool]]$.
+$[[Null]]$ is a valid instantiation in this case, while $[[Int]]$ is not a valid
+instantiation.
+
+Expressions are extended with type application $[[e A]]$ and
+type abstraction $[[\ GT . e]]$. A type abstraction is also a value.
+Additionally, context $[[G]]$ now also contains type variables with their
+respective disjointness constraints. The disjointness constraint of type variables
+is restricted to ground types ($[[GT]]$), which includes all the types
+except type variables. Ground types are shown at the top left of
+\Cref{fig:discussion:poly}.
+
+\paragraph*{Subtyping.}
+\Cref{fig:union:poly:sub} 
+shows subtyping relation 
+in the formalization of polymorphic \name.
+Note that subtyping, typing, and
+reduction relations now have two contexts $[[PG]]$ and $[[G]]$.
+Subtyping is extended for the two newly added types.
+The subtyping rule for type
+variables is a special case of reflexivity (\rref{polys-tvar})).
+\Rref{polys-all} is interesting.
+It says that input and output types of two disjoint quantifiers
+are covariant in the subtype relation.
+This contrasts with calculi with bounded quantification
+and disjoint polymorphism \citep{alpuimdisjoint}, where the subtyping between the
+type bounds of the constraints is contravariant,
+and the subtyping between the types in the universal quantification body is covariant.
+Note that in the calculus that we formalized in Coq,
+we study parametric polymorphism without distributive subtyping rules.
+Subtyping for polymorphic \name is reflexive and transitive:
+
+\begin{lemma}[Subtyping reflexivity]
+  $[[PG , G |- A <: A]]$
+\label{lemma:union:poly:sub:refl}
+\end{lemma}
+
+\begin{lemma}[Subtyping transitivity]
+  If $[[PG , G |- A <: B]]$ and $[[PG , G |- B <: C]]$ then $[[PG , G |- A <: C]]$
+\label{lemma:union:poly:sub:trans}
+\end{lemma}
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[polys]{$[[PG ; G |- A <: B]]$}{Subtyping}{top, int, bot, unit, arrow, ora, orb, orc, anda, andb, andc, tvar, all, prefl, pin}
+  \end{small}
+  \caption{Subtyping for polymorphic \name.}
+  \label{fig:union:poly:sub}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph*{Typing and Operational Semantics.}
+Typing is extended to
+assign the type to two newly added expressions and is 
+shown in \Cref{fig:union:poly:typ}. \Rref{ptyp-tap} is
+for type applications and \rref{ptyp-tabs} is for type abstractions.
+Similarly, \Cref{fig:union:poly:red} shows reduction rules for polymorphic \name.
+\Rref{polystep-tappl} is standard reduction rule for type application.
+\Rref{polystep-tapp} replaces $[[a]]$ with type $[[B]]$ in expression $[[e]]$.
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[ptyp]{$[[PG ; G |- e : A]]$}{Typing}{int, null, var, app, sub, abs, and, switch, prim, tap, tabs}
+  \end{small}
+  \caption{Typing for polymorphic \name.}
+  \label{fig:union:poly:typ}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[polystep]{$[[PG ; G |- e --> e']]$}{Operational Semantics}{appl, appr, beta, tappl, tapp, switch, switchl, switchr}
+  \end{small}
+  \caption{Operational Semantics for polymorphic \name.}
+  \label{fig:union:poly:red}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph*{Disjointness.}
+Disjointness has to be updated to accommodate type variables
+and disjoint quantifiers. The definition of algorithmic disjointness is
+roughly the same as discussed in \Cref{sec:inter}, except that it
+takes an additional argument $[[G]]$.
+Context $[[G]]$ is also an argument of LOS.
+LOS is extended to handle the additional cases of $[[a]]$ and $[[\GT . B]]$
+and is shown at the top right of \Cref{fig:discussion:poly}.
+LOS returns $[[\Bot . Bot]]$ as the least ordinary subtype of $[[\GT . B]]$.
+The type variable case is interesting. It returns the set difference
+of all ordinary subtypes and LOS of the disjointness constraint of type variable.
+Note that the disjointness constraint of type variables is restricted to
+ground types.
+
+\begin{definition}[Disjointness]
+\label{def:poly:ad}
+  $[[PG]] ; [[G]]$ $[[|-]]$ A $*$ B $\Coloneqq$  $[[findsubpoly PG G A]]$ $\cap$ $[[findsubpoly PG G B]]$ = $\{\}$.
+\end{definition}
+
+
+\paragraph*{Type-safety and Determinism.}
+The extension with disjoint polymorphism retains the properties of type-soundness
+and determinism. All the metatheory is formalized in Coq theorem prover.
+
+\begin{theorem}[Type Preservation]
+\label{lemma:union:poly:preservation}
+  If \ $[[PG , G |- e : A]]$ and $[[PG |- e --> e']]$ then $[[PG , G |- e' : A]]$.
+\end{theorem}
+
+\begin{theorem}[Progress]
+\label{lemma:union:poly:progress}
+If \ $[[PG , [] |- e : A]]$ then either $[[e]]$ is a value;
+or $[[e]]$ can take a step to $[[e']]$.
+\end{theorem}
+
+\begin{theorem}[Determinism]
+\label{lemma:union:poly:determinism}
+  If \ $[[PG , G |- e : A]]$ and \ $[[PG |- e --> e1]]$ and \ $[[PG |- e --> e2]]$ then $[[e1]]$ = $[[e2]]$.
+\end{theorem}
+
+\noindent Progress and determinism does not require significant changes for
+this extension. Type preservation requires the preservation of disjointness
+after substitution and disjointness narrowing along with disjointness weakening.
+Disjointness substitution states that if two types are disjoint
+before type substitution, they must be disjoint after type substitution
+as stated in Lemma~\ref{lemma:disj:subst}.
+The disjointness narrowing relates disjointness
+and subtyping. It states that it is safe to change the bounds of type variables
+from subtypes to supertypes as stated in Lemma~\ref{lemma:disj:narrow}.
+
+\begin{lemma}[Disjointness Substitution]\label{lemma:disj:subst}
+  If $[[PG ; G , a * GT1 |- B * C]]$ and $[[PG ; G |- GT2 * GT1]]$
+  then $[[PG ; G [ a := GT2 ] |-  B [ a := GT2 ] * C [ a := GT2 ] ]]$
+\end{lemma}
+
+\begin{lemma}[Disjointness Narrowing]\label{lemma:disj:narrow}
+  If $[[PG ; G , a * GT1 |- B * C]]$ and $[[PG ; G |- GT1 <: GT2]]$
+  then $[[PG ; G , a * GT2 |- B * C]]$
+\end{lemma}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% More general rule for bottom type
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{A More General Subtyping Rule for Bottom  Types}
+\label{sec:inter:refactoring}
+As discussed in Section~\ref{sec:inter:disj}, Ceylon includes the following subtyping rule:
+
+\begin{center}
+\drule[]{s-disj}
+\end{center}
+
+%One property of Ceylon programming language ~\cite{} is that all \emph{bottom-like} types are
+%subtype of $[[Bot]]$ type.
+\noindent It is possible to support, and in fact generalize, such a rule in \name. The idea is to
+employ our definition of lowest ordinary subtypes, and add the following rule
+%This property also holds in \name presented in \Cref{sec:union}. But this property does not
+%hold in \name with intersection types presented in \Cref{sec:inter} because we updated
+%disjointness definition. We add following novel subtyping rule in subtyping of
+%\Cref{sec:inter} to have this property
+to \name with intersection types:
+
+\begin{center}
+\drule[]{s-los}
+\end{center}
+
+\noindent \Rref{s-los} is an interesting addition in subtyping of \name.
+It says that if the LOS returns the empty set for some type $[[A]]$, then $[[A]]$
+is a subtype of all types. In other words, such type behaves like a \emph{bottom-like} type.
+Such rule generalizes the \rref{s-disj}
+employed in Ceylon, since when $[[A]]$ is an intersection type of two
+disjoint types, we get the empty set.
+%Since $[[findsubtypes Int /\ A -> B]]$ returns empty set,
+%therefor \rref{s-disj} makes $[[Int /\ A -> B]]$ subtype of all types.
+Moreover, adding \rref{s-los} makes \rref{s-bot} redundant as well, since the LOS for
+the bottom type is also the empty set. It is trivial to prove a lemma which says that $[[Bot]]$ is a subtype of all types. We drop \rref{s-bot} from the calculus discussed in \Cref{sec:inter}
+and prove Lemma~\ref{lemma:discussion:bls} to show this property instead:
+
+\begin{lemma}[Bottom Type Least Subtype]
+  $[[Bot <: A]]$.
+\label{lemma:discussion:bls}
+\end{lemma}
+
+\noindent A similar lemma can be proved to show that disjoint types are bottom-like
+(as in \rref{s-disj}), when \rref{s-los} is added to subtyping:
+
+\begin{lemma}[Disjont Intersections are Bottom-Like]
+  If $[[A *s B]]$ then $[[A /\ B <: Bot]]$.
+\label{lemma:discussion:disjoint-types}
+\end{lemma}
+
+\noindent The use of \rref{s-los} instead of \rref{s-disj} also has
+the advantage that it does not create a mutual dependency between
+disjointness and subtyping. We can have the definition of
+disjointness, which depends only on subtyping and ordinary types, and
+the definition of subtyping, which depends on LOS but not on
+disjointness.
+Nevertheless, like \rref{s-disj}, \rref{s-los} would not be an appropriate
+rule in calculi with a merge operator for the reasons discussed in Section~\ref{sec:inter}.
+
+We have formalized and proved all the metatheory, including
+type soundness, transitivity of subtyping, soundness and completeness
+of disjointness and determinism for a variant of \name with
+intersection types, nominal types, standard subtyping and \rref{s-los} in Coq.
+
+\begin{comment}
+\subsection{Disjoint Switches in Ceylon}
+\label{sec:discussion:ceylon}
+\ningning{A similar example is used in the overview. Maybe we want to be
+  consistent with the examples.}
+\baber{I will make this example consistent with the example in overview. But I suppose
+  I should be using Ceylon syntax in this section.}
+
+\begin{figure}[t]
+\begin{lstlisting}[language=Scala,xleftmargin=.2\textwidth, xrightmargin=.2\textwidth]
+// Student <: Person
+// speak function will not type check
+void speak(Person | Student val) {
+  switch (val)
+  case (is Person) {print("person speaks");}
+  case (is Student) {print("student speaks");}
+}
+\end{lstlisting}
+\caption{Ceylon disjointness code example.}
+\label{discussion:list:ceylon}
+\end{figure}
+
+\noindent The function \emph{speak} in \Cref{discussion:list:ceylon}
+will not type check in Ceylon. Because \emph{Person} and
+\emph{Student} are not disjoint types. \emph{Person} and \emph{Student} both have a common
+subtype which is \emph{Student}. \name will also reject such programs.
+A difference between the disjointness in Ceylon and \name is that
+Ceylon does not provide
+a formal disjointness definition.
+Ceylon specification does, however, provide English descriptions
+for disjointness.
+We compare some of those descriptions with
+the disjointness in \name. Ceylon has 14 different points describing
+disjointness, but some of these are language specific, for instance,
+disjointness for some of important classes and primitive types in Ceylon.
+We pick 3 points next, copied from the
+Ceylon specification\footnote{\url{https://ceylon-lang.org/documentation/1.3/spec/html_single/}}, which are quite general and they can be related to our
+own definitions of disjointness.
+According to the specification, two types X and Y are disjoint when:
+
+\begin{enumerate}
+  \item{X and Y are both classes and X is not a subclass of Y and Y is not a subclass of X}
+  \item{X is a union type $[[A \/ B]]$ and both Y and A are disjoint and Y and B are disjoint}
+  \item{X is an intersection type $[[A/\B]]$ and either Y and A are disjoint or Y and B are disjoint}
+\end{enumerate}
+
+\noindent
+Point (1) is one specific case of \Cref{def:inter:disj}.
+When two types X and Y are not subtypes of each other,
+they naturally do not share any common ordinary subtype.
+Point (2) is essentially the algorithmic
+rule for union disjointness (\rref{ad-orl} in Section~\ref{sec:union}) in \name.
+Point (3) corresponds to the following lemma that can be proved
+for the disjointness specification of \name with intersection types:
+\end{comment}
+
+\begin{comment}
+When a component type (either $[[A]]$ or $[[B]]$) of an 
+intersection type $[[A /\ B]]$
+is disjoint to some type $[[C]]$. Then that specific
+component type (either $[[A]]$ or $[[B]]$) and type $[[C]]$
+do not share any common ordinary subtype.
+If a component type of intersection type do not share ordinary subtype
+with some type, then naturally complete intersection type do not share
+ordinary subtype with that type.
+Therefore, $[[C]]$ is disjoint to $[[A /\ B]]$ if it is disjoint to either of
+the component type in intersection type.
+For example, type $[[Int /\ Top]]$ is disjoint to type $[[Bool]]$.
+Because first component of $[[Int /\ Top]]$, which is $[[Int]]$ in this case,
+is disjoint to $[[Bool]]$.
+Following \Cref{def:inter:disj}, $[[Int]]$ and $[[Bool]]$ do not share any
+ordinary subtype and so $[[Int /\ Top]]$ and $[[Bool]]$.
+We show this property with following two lemmas in \name:
+\end{comment}
+
+ % \begin{lemma}[Intersection Type Disjointness]
+ %   If $[[A *s C]]$ or $[[B *s C]]$ then $[[(A /\ B) *s C]]$.
+ % \label{lemma:discussion:comp:left:inter}
+ % \end{lemma}
+
+% \begin{lemma}[Left Component Type in Intersection Type Disjoint]
+%   If $[[A *s C]]$ then $[[(A /\ B) *s C]]$.
+% \label{lemma:discussion:comp:left:inter}
+% \end{lemma}
+% \vspace{-15pt}
+% \begin{lemma}[Right Component Type in Intersection Type Disjoint]
+%   If $[[B *s C]]$ then $[[(A /\ B) *s C]]$.
+% \label{lemma:discussion:comp:right:inter}
+% \end{lemma}
+
+% \snow{Point 3 does not correspond to the above two lemmas. It is about some
+%   inversion lemma: If $[[(A /\ B) *s C]]$ then $[[A *s C]]$ or $[[B *s C]]$.}
+% \baber{I think it does correspond to Point 3}
+
+ \subsection{Implementation of Disjoint Switches}
+ Ceylon code runs on the Java Virtual Machine (JVM).
+% There a few steps involved in overall Ceylon implementation
+% and compilation before actually running the program.
+A Ceylon program compiles to JVM bytecode.
+The final bytecode to which a Ceylon program is compiled to erase
+annotations for types not supported in the JVM. 
+In particular, union types such as 
+\lstinline{$[[String\/Null]]$} are erased into \lstinline{Object}.
+Disjoint switches are implemented by type casts. For each branch there is
+an \emph{instanceof} to test the type of the branch and select 
+a particular branch. An implementation of the \name calculus 
+could also use a similar approach for compilation.
+In essence the use of union types and disjoint switches
+provides an elegant alternative to type-unsafe idioms,
+based on \emph{instanceof} tests, that are currently widely
+used by Java programmers, while keeping comparable runtime performance.
+
+\begin{comment}
+ On the contrary, our operational semantics has access to type information
+ and selects a particular branch depending upon the available type information
+ as shown in \Cref{sec:union:os}.
+ \bruno{Look at a simple program with disjoint switches and see how that is compiled.
+   I presume that it is compile by erasing the union/intersection types and then
+   using instanceof tests instead of the disjoint switches. You can probably
+   compile a ceylon file and then try to open the class file in Eclipse or some
+   other IDE to see what kind of (bytecode) is generated.
+ }
+ \baber{Done. I verified from the bytecode. It uses instanceof of tests and
+ selects a branch where the test matches. It actually also has a default
+ case in bytecode at the end to handle type error if the switch is not
+ exhaustive. This is in contradiction to Ceylon specification of
+ exhaustive checking in switch construct in source code.}
+\end{comment}
+
+%---------------------------------------------------------------------------%%
+
+% \subsection{Lifting the Ground Type Restriction on Type Variables}
+
+% \baber{Talk about the updated disjointness without ground type restriction
+% on type variables. Leave last section as is in the paper.}
+
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../Thesis"
+%%% org-ref-default-bibliography: "../Thesis.bib"
+%%% End:

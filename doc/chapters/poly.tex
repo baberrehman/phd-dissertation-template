@@ -1,0 +1,1587 @@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Revisiting Disjointness}
+\label{chap:disjointness}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Polymorphic \name discussed in 
+\Cref{sec:discussion:poly} has a ground
+type restriction on type variable bounds. Ground types 
+constitute of all the types
+except type variables. This means that a type variable 
+cannot be declared as a bound to another type variable.
+While this is a common approach in many polymorphic 
+calculi \citep{dolan2017polymorphism},
+this approach limits the expressiveness of calculus.
+For example, in our setting, two type variables
+cannot be declared disjoint in the presence of ground type restriction.
+This restrains us from writing the following program:
+
+\begin{lstlisting}[language=Scala]
+  Bool isFirstMatch [X * Y] (x : X | Y) = switch (x)
+                                            (x:X) -> true
+                                            (y:Y) -> false
+\end{lstlisting}
+
+\noindent Since the bound of type variable X is another type variable
+Y, therefore, this program will not type-check in the presence of
+ground type restriction on type variable bound. Any type except
+the type variable can be a bound of a type variable. 
+In contrast, the following program will type-check:
+
+\begin{lstlisting}[language=Scala]
+  Bool isInteger [X * Int] (x : X | Int) = switch (x)
+                                             (x:Int)   -> true
+                                             (y:X)     -> false
+\end{lstlisting}
+
+
+\noindent Notice that the bound of type variable X in the program above
+is a base type i.e. $[[Int]]$.
+While this approach with ground type restriction is useful in many
+scenarios, it restrains us from writing some valid programs.
+In this chapter we study a variant of
+\name with disjoint polymorphism without a ground type restriction on 
+type variable bounds. This makes the current calculus more
+expressive than the one discussed in \Cref{sec:poly}
+and \emph{isFirstMatch} type-checks in this calculus.
+
+% \begin{lstlisting}
+% Bool isFirstMatch [X * Y] (x : X | Y) = switch (x)
+%                                           (x:X) -> True
+%                                           (y:Y) -> False
+% \end{lstlisting}
+
+We develop a novel disjointness algorithm for
+intersection and union types
+by exploiting union ordinary and union splittable types \citep{huang2021distributing}.
+We study two variants of \name with the newly developed disjointness,
+one without polymorphism and another with polymorphism.
+The first calculus establishes
+a connection with the calculi without polymorphism. We show that the disjointness
+in \Cref{sec:inter} is sound and complete with respect to the disjointness
+in \Cref{sec:union:disj:union:inter}.
+The second calculus revisits disjoint polymorphism in
+\Cref{sec:rev:disjoint:disjpoly} and proposes a
+revised disjointness algorithm without ground types.
+\Cref{appendix1} presents another variant of the disjointness
+algorithm based on Common Ordinary Subtypes (COST).
+
+
+%---------------------------------------------------------------------------%%
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+      \begin{small}
+      \begin{center}
+        \begin{tabular}{rcl}
+          \toprule
+          $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[A \/ B]] \mid [[A /\ B]] \mid [[Null]] $ \\
+          $[[e]]$ & $\Coloneqq$ & $ [[x]] \mid [[i]] \mid [[\x.e]] \mid [[e1 e2]] \mid [[switch e A e1 B e2]] \mid [[null]]$\\
+          $[[v]]$ & $\Coloneqq$ & $ [[i]] \mid [[\x.e]] \mid [[null]] $ \\
+          $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]] $ \\
+          \bottomrule
+        \end{tabular}
+
+        \drules[s]{$[[A <: B]]$}{Subtyping}{top, int, bot, null, arrow, ora, orb, orc, anda, andb, andc}
+      \end{center}
+      \end{small}
+  \caption{Syntax and subtyping for \name with intersection types.}
+  \label{fig:rev:disj:syntax:sub}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+%---------------------------------------------------%%
+
+%%% Disjointness with Intersection and Union Types %%%
+
+%---------------------------------------------------%%
+
+
+\section{Disjointness with Intersection and Union Types}
+\label{sec:union:disj:union:inter}
+
+% \baber{Talk about a simple system without polymorphism, with intersection and union types.}
+Recall that our first disjointness algorithm introduced in \Cref{sec:union} 
+did not work when we add intersection types.
+% We came up with set based disjointness because we had issues with the addition of
+% intersection types. 
+In \Cref{sec:inter} we come up with
+another disjointness algorithm based on
+Least Ordinary Subtypes (LOS) 
+that accounts for intersection
+and union types. LOS is a function that computes
+a set of least ordinary subtypes of the input type.
+The disjointness algorithm discussed in \Cref{sec:inter} 
+states that two types are disjoint if set intersection 
+of LOS of two types is an empty set.
+
+In this section we discuss another variant of the disjointness 
+algorithm which is sound and complete with respect to the 
+standard disjointness specifications discussed earlier in 
+this thesis. We also explain the 
+reason where naive disjointness algorithm fails with 
+intersection and union types in detail in this section.
+
+\paragraph{Syntax and subtyping.}
+Syntax and subtyping for \name with intersection types is shown in
+\Cref{fig:rev:disj:syntax:sub}. Types, expressions, values and
+typing context ($[[G]]$) stay the same as in \Cref{sec:inter}.
+We use conventional subtyping and drop
+distributive subtyping rules for function, intersection, and
+union types to emphasize the pivotal concept of disjointness
+for \name.
+
+
+\subsection{Disjointness, Union Ordinary, and Union Splittable Types}
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[uo]{$[[UO A]]$}{Union Ordinary Types}{top,int,arrow,unit,and}
+    \drules[usp]{$[[B <=u A u=> C]]$}{Union Splittable Types}{or,orandl,orandr}
+  \end{small}
+  \caption{Syntax, union ordinary, and union splittable types.}
+  \label{fig:disj:usp:uo}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph{Union ordinary and union splittable types.}
+Union ordinary and union splittable types \cite{}
+play an essential role in the formulation of the
+novel disjointness algorithm. These types are shown in \Cref{fig:disj:usp:uo}.
+$[[Top]]$, $[[Int]]$, $[[A -> B]]$ and $[[Null]]$ are union ordinary types as shown
+by \rref{uo-top,uo-int,uo-arrow,uo-unit} respectively.
+An intersection type is union ordinary only if both of its parts are union ordinary
+types as shown in \rref{uo-and}. For example, $[[Int/\Top]]$ is a union ordinary type.
+Whereas, $[[(Int\/A->B)/\Top]]$ is not union ordinary because left part
+of the intersection is not union ordinary i.e $[[Int\/A->B]]$.
+
+Union types are never union ordinary types. On the contrary,
+union types are union splittable types by \rref{usp-or}. 
+Intersection types are union splittable
+if either of the component of the intersection is union splittable
+by \rref{usp-andl,usp-andr}.
+We illustrate union splittable types with the help of following examples:
+
+% \begin{center}
+% \begin{tabular}{ll}
+%   1. & \begin{mathpar} \inferrule* { }{[[Int <=u Int\/Bool u=> Bool]]} \end{mathpar} \\
+% \end{tabular}
+% \end{center}
+
+%% Example 1
+
+\begin{itemize}
+  \item {\mathcolorbox{lightgray}{[[Int\/Bool]]}}: $[[Int\/Bool]]$ is trivially union
+      splittable into $[[Int]]$ and $[[Bool]]$ by \rref{usp-or}.
+\end{itemize}
+
+\begin{mathpar} 
+  \inferrule*[Right=\rref*{usp-or}] 
+    %{ \inferrule* { }{[[Int]]} \\ \inferrule* { }{[[Bool]]} } 
+    { }
+  {[[Int <=u Int\/Bool u=> Bool]]} 
+\end{mathpar}
+
+%% Example 2
+
+\begin{itemize}
+  \item \mathcolorbox{lightgray}{[[(Int \/ Bool) /\ String]]}: $[[(Int \/ Bool) /\ String]]$
+      is splittable into $[[Int/\String]]$ and $[[Bool/\String]]$ by \rref{usp-orandl} and
+      \rref{usp-or}.
+\end{itemize}
+
+\begin{mathpar}
+  \inferrule* [Right=\rref*{usp-orandl}] 
+    { \inferrule*[Right=\rref*{usp-or}] 
+      %{ \inferrule* { }{[[Int]]} \\ \inferrule* { }{[[Bool]]} }
+      { } 
+    {[[Int <=u Int\/Bool u=> Bool]]} }
+    {[[Int/\String <=u (Int \/ Bool) /\ String u=> Bool/\String]]} 
+\end{mathpar}
+
+%% Example 3
+
+\begin{itemize}
+  \item \mathcolorbox{lightgray}{[[String /\ (Int \/ Bool)]]}: $[[String /\ (Int \/ Bool)]]$
+      is splittable into $[[String/\Int]]$ and $[[String/\Bool]]$ by \rref{usp-orandr} and
+      \rref{usp-or}.
+\end{itemize}
+
+\begin{mathpar}
+  \inferrule* [Right=\rref*{usp-orandr}] 
+    { \inferrule*[Right=\rref*{usp-or}] 
+      %{ \inferrule* { }{[[Int]]} \\ \inferrule* { }{[[Bool]]} }
+      { } 
+    {[[Int <=u Int\/Bool u=> Bool]]} }
+    {[[String/\Int <=u String /\ (Int \/ Bool) u=> String/\Bool]]} 
+\end{mathpar}
+
+% \end{enumerate}
+% \begin{tabular}{ll}
+%   %\hline
+% %  1. & \inferrule* {\inferrule* {aa \\ bb}{cc} \\ dd} {ee} \\
+%   % 1. & \infer{ }{[[Int <=u Int\/Bool u=> Bool]]} \\
+%   %    & \\
+%   % 2. & \infer{[[Int <=u Int\/Bool u=> Bool]]}{[[Int/\String <=u (Int \/ Bool) /\ String u=> Bool/\String]]} \\
+%   %\hline
+% \end{tabular}
+
+\noindent Note that a type is either union ordinary or union splittable
+(\Cref{lemma:union:exclus:uo:usp}):
+
+\begin{lemma}[Exclusivity of union ordinary and union splittable types]
+  $\forall$ $[[A]]$, $[[A]]$ is either union ordinary or union splittable and never both.
+\label{lemma:union:exclus:uo:usp}
+\end{lemma}
+
+
+
+% \begin{enumerate}
+%   \item \infer{ }{[[Int <=u Int\/Bool u=> Bool]]}
+%   \item \infer{ }{[[Int <=u Int\/Bool u=> Bool]]}
+% \end{enumerate}
+
+% \begin{lstlisting}
+% -------------------------
+%  Int <= Int|Bool => Bool
+% \end{lstlisting}
+
+% \begin{lstlisting}
+% -------------------------
+%  Int <= Int|Bool => Bool
+% --------------------------------------------------
+% Int&String <= (Int | Bool) & String => Bool&String
+% \end{lstlisting}
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[ad]{$[[A * B]]$}{Disjointness}{btml,btmr,intl,intr,null-intl,null-intr,null-funl,null-funr,orll,orrr,andll,andlss,andrr,andrss,emptyl,emptyr}
+  \end{small}
+  \caption{Disjointness based on splittable types for \name.}
+  \label{fig:union:rev:disj}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph{Algorithmic Disjointness.}
+The algorithmic disjointness based on union ordinary and union 
+splittable types is shown in \Cref{fig:union:rev:disj}.
+\Rref{ad-btml,ad-btmr,ad-intl,ad-intr,ad-null-intl,ad-null-intr,ad-null-funl,ad-null-funr} are
+trivial disjointness axioms. The novelty of the disjointness 
+algorithm lies in the disjointness rules for intersection and union types.
+
+\Rref{ad-orll} states that if $[[A]]$ is union splittable into $[[A1]]$ and
+$[[A2]]$ then $[[A]]$ is disjoint to $[[B]]$ only if $[[A1]]$ and $[[A2]]$
+are disjoint to $[[B]]$. \Rref{ad-orrr} is symmetric to \rref{ad-orll}.
+\Rref{ad-andll,ad-andlss} state that an intersection type $[[A1 /\ A2]]$ 
+is disjoint to another type $[[B]]$ when $[[B]]$ is union ordinary and
+either $[[A1]]$ or $[[A2]]$ is disjoint to $[[B]]$.
+\Rref{ad-andrr,ad-andrss} are symmetric to \rref{ad-andll,ad-andlss}.
+\Rref{ad-emptyl,ad-emptyr} are interesting rules. They state that an
+intersection of two disjoint types is disjoint with any other type.
+The intersection of two disjoint types forms an empty
+type or a bottom-like type, which is disjoint with any other type.
+%\baber{Show a few examples here.}
+The following example illustrates our novel disjointness algorithm:
+
+\begin{itemize}
+  \item {\mathcolorbox{lightgray}{[[(Int\/Bool) * String]]}}: $[[Int\/Bool]]$ is
+      disjoint to $[[String]]$ by \rref{ad-orll}.
+\end{itemize}
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{ad-orll}]
+   {
+      \inferrule*[Left=\rref*{usp-or}] 
+        %{ \inferrule* { }{[[Int]]} \\ \inferrule* { }{[[Bool]]} } 
+        { }
+      {[[Int <=u Int\/Bool u=> Bool]]} \\
+      \inferrule*
+      { }
+      {[[Int * String]]} \\
+      \inferrule*
+      { }
+      {[[Bool * String]]}
+    }
+    {[[(Int\/Bool) * String]]}
+\end{mathpar}
+
+
+
+\subsection{Essence of Union Ordinary Types}
+
+\paragraph{Union ordinary restriction.}
+Note that the union ordinary premise in
+\rref{ad-andll,ad-andlss,ad-andrr,ad-andrss}
+is optional. This premise only
+makes the rules less overlapping.
+It allows the application of
+\rref{ad-andll,ad-andlss,ad-andrr,ad-andrss} only if one type is an intersection
+type and the other type is a union ordinary type. When the other type is not union
+ordinary type, the disjointness algorithm falls to the union rules.
+The algorithm then splits the other type until it becomes union 
+ordinary and then applies either of the
+\rref{ad-andll,ad-andlss,ad-andrr,ad-andrss}.
+
+Next we explain the naive disjointness algorithm
+without union ordinary and union splittable types and then
+emphasize the significance of union ordinary and union splittable types.
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[ad]{$[[A * B]]$}{Disjointness without union ordinary and union splittable types}{btml,btmr,intl,intr,null-intl,null-intr,null-funl,null-funr,orl,orr,andla,andlb,andra,andrb,emptyl,emptyr}
+  \end{small}
+  \caption{Disjointness \textbf{without} union ordinary and union splittable types for \name.}
+  \label{fig:union:rev:disj:naive}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph{Disjointness \textbf{without} union ordinary and
+union splittable types.}
+The naive disjointness algorithm without union ordinary and
+union splittable types is shown
+in \Cref{fig:union:rev:disj:naive}.
+The \rref{ad-btml,ad-btmr,ad-intl,ad-intr,ad-null-intl,ad-null-intr,ad-null-funl,ad-null-funr,ad-emptyl,ad-emptyr} are straightforward and already explained.
+The rules for the intersection types
+(\rref*{ad-andla,ad-andlb,ad-andra,ad-andrb}) state
+that an intersection type $[[A/\B]]$ is disjoint to another type $[[C]]$ if 
+either $[[A]]$ or $[[B]]$ is disjoint to $[[C]]$. Importantly, the rules for 
+the intersection types no longer carry a premise with union ordinary 
+restriction as in \Cref{fig:union:rev:disj}.
+Similarly, rules for the union types (\rref*{ad-orl,ad-orr})
+do not depend on union 
+splittable types. The \rref{ad-orl,ad-orr} simply state that a
+union type $[[A\/B]]$ 
+is disjoint to another type $[[C]]$ if $[[A]]$ disjoint to $[[C]]$ and 
+$[[B]]$ disjoint to $[[C]]$ holds.
+
+\paragraph{Significance of union ordinary types.}
+Recall that the union ordinary types play an essential role to make
+the rules for the intersection types in \Cref{fig:union:rev:disj}
+more algorithmic.
+We illustrate this with the help of following example.
+Note that we apply the disjointness rules from \Cref{fig:union:rev:disj:naive} 
+in the following derivation.
+
+% \begin{center}
+%   \infer{[[(Int \/ Bool) *s String]]}{[[(Int \/ Bool) *s (String \/ Int)]]}{[[(Int \/ Bool) /\ (Bool \/ String) *s (String \/ Int)]]}
+% \end{center}
+
+\begin{mathpar}
+  \inferrule* [Right=\rref*{ad-andla}]
+     { \inferrule* [Right=\rref*{ad-orr}] 
+       { \inferrule* [Left=\rref*{ad-orl}]
+         { \inferrule*
+           { }
+           {[[Int * String]]} \\ 
+           \inferrule*
+           { }
+           {[[Bool * String]]}
+         } 
+         {[[(Int \/ Bool) * String]]} \\
+        \inferrule* [Right=\rref*{ad-orl}]
+         { \inferrule* [Right={\color{red}???}]
+           { }
+           {\mathcolorbox{yellow}{[[Int * Int]]}} \\
+           \inferrule*
+           { } 
+           {[[Bool * Int]]}
+         } 
+         {[[(Int \/ Bool) * Int]]} } 
+       {[[(Int \/ Bool) * (String \/ Int)]]}}
+    {[[(Int \/ Bool) /\ (Bool \/ String) * (String \/ Int)]]} 
+\end{mathpar}
+
+% \begin{lstlisting}
+% Int * String  Bool * String       Int * Int    Bool * Int
+% ---------------------------       -----------------------   
+% (Int | Bool) * String             (Int | Bool) * Int
+% ------------------------------------------------------
+% (Int | Bool) * (String | Int)
+% -------------------------------------------------
+% (Int | Bool) /\ (Bool | String) * (String | Int) 
+% \end{lstlisting} 
+
+\noindent $[[(Int \/ Bool) /\ (Bool \/ String)]]$ and  $[[(String \/ Int)]]$
+are disjoint types and the algorithm in \Cref{fig:union:rev:disj:naive} 
+may backtrack to classify them as disjoint types
+without union ordinary restriction. In the derivation above we apply intersection
+rules first and then union rules. The derivation proceeds by
+applying the \rref{ad-andla}
+which generates a sub-problem of $[[(Int \/ Bool) * (String \/ Int)]]$.
+It then applies \rref{ad-orr} which further generates two sub-problems
+$[[(Int \/ Bool) * String]]$ and $[[(Int \/ Bool) * Int]]$.
+
+\begin{enumerate}
+  \item  Applying \rref{ad-orl}, $[[(Int \/ Bool) * String]]$ can be solved since
+    $[[Int * String]]$ and $[[Bool * String]]$ holds.
+
+  \item $[[(Int \/ Bool) * Int]]$ fails to derive. The only option that we have left at this stage is to apply \rref{ad-orl} which requires 
+    $\mathcolorbox{yellow}{[[Int * Int]]}$ and $[[Bool * Int]]$.
+    The highlighted part in the derivation fails to hold i.e. 
+    $\mathcolorbox{yellow}{[[Int * Int]]}$
+    does not hold. Therefore the current derivation fails.
+\end{enumerate}
+
+This example also fails to derive if we start by applying 
+\rref{ad-andlb} which finally will
+result in $\mathcolorbox{yellow}{[[String * String]]}$. 
+The algorithm will keep on
+backtracking with the application of intersection rules at the very start.
+A solution to the successful derivation in current example is to apply union
+rules first and then intersection rules. We show a successful derivation below
+and then explain how union ordinary restriction reduces backtracking and
+makes disjointness rules less overlapping.
+Note that we use initials as place-holders instead of full type names
+for the sake of space. In particular, I stands for $[[Int]]$, 
+B for $[[Bool]]$, C for $[[Char]]$ and S for $[[String]]$. 
+
+\begin{mathpar}
+  \inferrule* [Right=\rref*{ad-orr}]
+       { \inferrule* [Left=\rref*{ad-andla}]
+        { \inferrule* [Left=\rref*{ad-orl}]
+          { \inferrule*
+            { }
+            {[[I * S]]} \\
+            \inferrule*
+            { }
+            {[[B * S]]}
+          }
+          {[[(I \/ B) * S]]}
+        }
+        {[[(I \/ B) /\ (B \/ S) * S]]} \\
+        \inferrule* [Right=\rref*{ad-andlb}]
+        { \inferrule* [Right=\rref*{ad-orl}]
+          { \inferrule*
+            { }
+            {[[B * I]]} \\
+            \inferrule*
+            { }
+            {[[S * I]]}
+          }
+          {[[(B \/ S) * I]]} 
+        }
+        {[[(I \/ B) /\ (B \/ S) * I]]}
+       }
+    {[[(I \/ B) /\ (B \/ S) * (S \/ I)]]} 
+\end{mathpar}
+
+Notice that we start by applying \rref{ad-orr} in the derivation above.
+The key at this point is to apply union rules first and then intersection
+rules. This reduces the backtracking of the disjointness algorithm.
+Therefore, we enforce an optional union ordinary restriction in the
+intersection rules (\rref*{ad-andll,ad-andlss,ad-andrr,ad-andrss}) in
+\Cref{fig:union:rev:disj} in contrast to the naive disjointness rules in
+\Cref{fig:union:rev:disj:naive}.
+% This restriction helps to minimize the backtracking of the rules
+% which results in more algorithmic rules.
+The union ordinary premise restricts the application of 
+the intersection rules unless the union rules have been
+applied.
+
+
+% When applying intersection rules we have to choose
+% one of the part of whole intersection. Chosen part may not be disjoint with the
+% other type. We need to enforce the algorithm to apply union rules first and then
+% intersection rules in such cases.
+% Therefore we enforce union ordinary restriction to make the rules more algorithmic.
+% Note that algorithm is still sound and complete without union ordinary restriction.
+
+
+\subsection{Essence of Union Splittable Types}
+
+%\paragraph{Significance of union splittable types.}
+% \noindent Disjointness relation without union ordinary and union
+% splittable types is shown in \Cref{fig:union:rev:disj:naive}. 
+Another issue with the naive
+disjointness algorithm shown in \Cref{fig:union:rev:disj:naive} 
+is that it is incomplete. We show the incompleteness with the
+following example:
+
+\begin{mathpar}
+   \inferrule* [Right=\rref*{ad-andla}]
+   { \inferrule* [Right=\rref*{ad-andra}]
+    { \inferrule* [Right=\rref*{ad-orl}]
+      { \inferrule* [Left=\rref*{ad-orr}]
+        { \inferrule*
+          { } 
+          {[[I *s S]]} \\
+          \inferrule* [Right=\rref*{ad-orr}]
+          {  \inferrule*
+              { }
+              {[[I *s C]]} \\
+             \inferrule* [Right={\color{red}???}]
+              { }
+              {\mathcolorbox{yellow}{[[I *s I]]}}
+          }
+          {[[I *s (C \/ I)]]} 
+        }
+        {[[I *s (S\/C\/I)]]}
+        \inferrule*
+        %{ \inferrule* 
+          %{ }
+          %{[[Bool *s (String\/Char\/Int)]]} \\
+          %\inferrule*
+          { \inferrule* [Right={\color{red}???}, vdots=1.5em]
+            { }
+            {\mathcolorbox{yellow}{[[S *s S]]}}
+          }
+          %{[[String *s (String\/Char\/Int)]]}
+        %}
+        {[[(B\/S) *s (S\/C\/I)]]} 
+        }
+       {[[(I\/B\/S) *s (S\/C\/I)]]}
+       }
+     {[[(I\/B\/S) *s (S\/C\/I) /\ (C\/I\/B)]]}}
+   {[[(I\/B\/S) /\ (B\/S\/C) *s (S\/C\/I) /\ (C\/I\/B)]]}
+\end{mathpar}
+
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \drules[ad]{$[[A * B]]$}{Disjointness}{btml,btmr,intl,intr,null-intl,null-intr,null-funl,null-funr,orll,orrr,andll,andlss,andrr,andrss,emptyl,emptyr}
+%   \end{small}
+%   \caption{Disjointness based upon splittable types for \name.}
+%   \label{fig:union:rev:disj}
+% \end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+% \baber{Show rules without union ordinary and union splittable types and then explain
+% incompleteness problem.}
+
+% \begin{lstlisting}
+
+% --------------------------------------------------   
+% (Int | Bool | String) * (String | Char | Int)
+% ------------------------------------------------------
+% (Int | Bool | String) * (String | Char | Int) /\ (Char | Int | Bool)
+% ------------------------------------------------------------------------------
+% (Int|Bool|String) /\ (Bool|String|Char) * (String|Char|Int) /\ (Char|Int|Bool) 
+% \end{lstlisting}
+
+\noindent
+$[[(Int \/ Bool \/ String) /\ (Bool \/ String \/ Char)]]$  and 
+$[[(String \/ Char \/ Int) /\ (Char \/ Int \/ Bool)]]$
+are clearly disjoint types but the algorithm in \Cref{fig:union:rev:disj:naive}
+fails to classify them as disjoint types without union splittable types.
+It does not matter whether we break the left intersection or right intersection
+first, we cannot make these two types disjoint. Importantly the two types
+as a whole are disjoint. But if we drop any component from either of the
+intersection, the smaller types are no longer disjoint as shown in
+the derivation above. 
+
+\Rref{ad-andla} drops a part of intersection
+from the left type resulting in a sub-problem 
+$[[(Int\/Bool\/String) *s (String\/Char\/Int) /\ (Char\/Int\/Bool)]]$
+which does not hold because $[[Int]]$ is a common ordinary subtype
+of $[[(Int\/Bool\/String)]]$ and $[[(String\/Char\/Int) /\ (Char\/Int\/Bool)]]$.
+The derivation finally results in the highlighted sub-problems
+i.e $\mathcolorbox{yellow}{[[Int * Int]]}$ and 
+$\mathcolorbox{yellow}{[[String * String]]}$. $[[Int]]$ is not
+disjoint to $[[Int]]$ and so is not $[[String]]$ to $[[String]]$.
+Therefore the naive disjointness algorithm shown 
+in \Cref{fig:union:rev:disj:naive} fails and is not complete.
+
+\paragraph{Union splittable types to the rescue.}
+Union splittable types come to the rescue in such cases and
+solve the incompleteness problem of the disjointness algorithm.
+Note that union ordinary types are optional because union 
+ordinary types just make the rules less overlapping.
+The disjointness algorithm stays sound and complete without
+union ordinary types. But union splittable types are essential.
+The disjointness algorithm will not be complete without union 
+splittable types. The algorithm in \Cref{fig:union:rev:disj} 
+is sound and complete, whereas the algorithm in 
+\Cref{fig:union:rev:disj:naive} is sound but incomplete.
+
+\paragraph{Illustration of Completeness with union splittable types.}
+We show how the union splittable types solve the incompleteness problem
+of the disjointness algorithm in \Cref{fig:union:rev:disj} using 
+the same example i.e
+$[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s (String\/Char\/Int) /\ (Char\/Int\/Bool)]]$.
+Since both of the types:
+
+\begin{enumerate}
+  \item A1 = $[[(Int\/Bool\/String) /\ (Bool\/String\/Char)]]$
+  \item A2 = $[[(String\/Char\/Int) /\ (Char\/Int\/Bool)]]$
+\end{enumerate}
+
+\noindent are not union ordinary. Therefore we cannot apply intersection rules
+(\rref*{ad-andll,ad-andlss,ad-andrr,ad-andrss}) from
+\Cref{fig:union:rev:disj} at the very start of the derivation.
+We can apply either of the \rref{ad-orll} or \rref{ad-orrr} since
+both of the types are union splittable.
+% Note that we use initials as place-holders instead of full type names
+% for the sake of space. In particular, I stands for $[[Int]]$, 
+% B for $[[Bool]]$, C for $[[Char]]$ and S for $[[String]]$. 
+
+%$[[(String \/ Char \/ Int) /\ (Char \/ Int \/ Bool)]]$:
+
+\begin{mathpar}
+   \inferrule* [Right=\rref*{ad-orrr}]
+    { \inferrule* [Right=\rref*{usp-orandl}]
+      {  \inferrule* [vdots=3em]
+         { }{ }
+      }
+   %  { \inferrule* [Right=\rref*{ad-orl}]
+   %    { \inferrule* [Left=\rref*{ad-orr}]
+   %      { \inferrule*
+   %        { } 
+   %        {[[Int *s String]]} \\
+   %        \inferrule* [Right=\rref*{ad-orr}]
+   %        {  \inferrule*
+   %            { }
+   %            {[[Int *s Char]]} \\
+   %           \inferrule* [Right={\color{red}???}]
+   %            { }
+   %            {\mathcolorbox{yellow}{[[Int *s Int]]}}
+   %        }
+   %        {[[Int *s (Char \/ Int)]]} 
+   %      }
+   %      {[[Int *s (String\/Char\/Int)]]}
+   %      \inferrule*
+   %      %{ \inferrule* 
+   %        %{ }
+   %        %{[[Bool *s (String\/Char\/Int)]]} \\
+   %        %\inferrule*
+   %        { \inferrule* [Right={\color{red}???}, vdots=1.5em]
+   %          { }
+   %          {\mathcolorbox{yellow}{[[String *s String]]}}
+   %        }
+   %        %{[[String *s (String\/Char\/Int)]]}
+   %      %}
+   %      {[[(Bool\/String) *s (String\/Char\/Int)]]} 
+   %      }
+   %     {[[(Int\/Bool\/String) *s (String\/Char\/Int)]]}
+   %     }
+      {[[S/\(C\/I\/B) <=u (S\/C\/I) /\ (C\/I\/B) u=> (C\/I) /\ (C\/I\/B)]]}
+     }
+   {[[(I\/B\/S) /\ (B\/S\/C) *s (S\/C\/I) /\ (C\/I\/B)]]}
+\end{mathpar}
+
+\noindent Splitting goes as follows:
+
+\begin{mathpar}
+\inferrule* [Right=\rref*{usp-orandl}]
+ {  \inferrule* [Left=\rref*{usp-or}]
+    { \inferrule* [vdots=3em]
+      { }{ }
+    }
+    {[[S <=u (S\/C\/I) u=> C\/I]]} \\
+    \inferrule* [vdots=3em]
+    % {[[Char <=u Char\/Int u=> Int]]}
+    % {[[Char/\(Char\/Int\/Bool) <=u (Char\/Int)/\(Char\/Int\/Bool) u=> Int/\(Char\/Int\/Bool)]]}
+      { }
+      { }
+ }
+ {[[S/\(C\/I\/B) <=u (S\/C\/I) /\ (C\/I\/B) u=> (C\/I)/\(C\/I\/B)]]}
+\end{mathpar}
+
+% \begin{lstlisting}
+%                    ------------                             --------------
+%                    String /\ Int                            String /\ Bool
+% ---------------    -------------                            ------------
+% String /\ Char     String /\ Int <= String /\ (Int|Bool) => String/\Bool
+% --------------------------------------------------------------------------
+% String /\ Char <= String /\ (Char|Int|Bool) => String /\ (Int|Bool)      ----
+% -------------------------------------------------------------------------------
+% String /\ (Char|Int|Bool) <= (String|Char|Int) => (Char|Int) /\ (Char|Int|Bool)
+% -------------------------------------------------------------------------------
+% (String|Char|Int) /\ (Char|Int|Bool)
+% \end{lstlisting}
+
+\noindent We split the right side in the disjointness derivation above. 
+The choice of the right or the left type does not affect 
+the outcome of the disjointness algorithm. The union splitting algorithm 
+will keep on splitting the right type unless all the smaller
+types become union ordinary types.
+When the splitting algorithm concludes splitting of
+$[[(String\/Char\/Int) /\ (Char\/Int\/Bool)]]$, the final result will be a
+list consisting of the following union ordinary types:
+
+\begin{itemize}
+  \item $\{[[String/\Char]] , [[String/\Int]] , [[String/\Bool]] , [[Char/\Char]] , [[Char/\Int]] , [[Char/\Bool]] ,
+        [[Int/\Char]] , [[Int/\Int]] , [[Int/\Bool]]\}$.
+\end{itemize}
+
+\noindent The whole disjointness checking problem breaks into the following sub-problems:
+
+\begin{enumerate}
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s String/\Char]]$
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s String/\Int]]$
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s String/\Bool]]$
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Char/\Char]]$
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Char/\Int]]$
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Char/\Bool]]$
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Int/\Char]]$
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Int/\Int]]$
+  \item $[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Int/\Bool]]$
+\end{enumerate}
+
+% \begin{lstlisting}
+% (Int|Bool|String) /\ (Bool|String|Char) * String/\Char
+% (Int|Bool|String) /\ (Bool|String|Char) * String/\Int
+% (Int|Bool|String) /\ (Bool|String|Char) * String/\Bool
+% (Int|Bool|String) /\ (Bool|String|Char) * Char/\Char
+% (Int|Bool|String) /\ (Bool|String|Char) * Char/\Int
+% (Int|Bool|String) /\ (Bool|String|Char) * Char/\Bool
+% (Int|Bool|String) /\ (Bool|String|Char) * Int/\Char
+% (Int|Bool|String) /\ (Bool|String|Char) * Int/\Int
+% (Int|Bool|String) /\ (Bool|String|Char) * Int/\Bool
+% \end{lstlisting}
+
+\noindent Notice that 7 out of 9 sub-problems are trivially solvable by 
+\rref{emptyr} except sub-problems 4 and 8.
+This is because the right type in sub-problems 1, 2, 3, 5, 6, 7 and 9 is
+an intersection of two disjoint types. For example,
+the derivation for sub-problem 1 is:
+
+\begin{mathpar}
+  \inferrule* [Right=\rref*{ad-emptyr}]
+    {\inferrule*
+      { }
+      {[[String *s Char]]}
+    }
+    {[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s String/\Char]]}
+\end{mathpar}
+
+
+\noindent Next, we show the derivation trees to solve sub-problem 4 and 8. 
+
+\paragraph{Derivation for (4) \mathcolorbox{lightgray}{[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Char/\Char]]}:}
+
+\begin{mathpar}
+  \inferrule* [Right=\rref*{ad-andll}]
+  { \inferrule* [Right=\rref*{ad-andrr}]
+    { \inferrule* [Right=\rref*{ad-orll}]
+      { \inferrule*
+        { \inferrule*
+          { }
+          {[[Int *s Char]]} \\
+          \inferrule* [Right=\rref*{ad-orll}]
+          { \inferrule*
+            { \inferrule*
+              { }
+              {[[Bool *s Char]]} \\
+              \inferrule*
+              { }
+              {[[String *s Char]]}
+            }
+            {[[Bool <=u Bool\/String u=> String]]}
+          }
+          {[[(Bool\/String) *s Char]]}
+        }
+        {[[Int <=u (Int\/Bool\/String) u=> Bool\/String]]}
+      }
+      {[[(Int\/Bool\/String) *s Char]]}
+    }
+    {[[(Int\/Bool\/String) *s Char/\Char]]}
+  }
+  {[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Char/\Char]]}
+\end{mathpar}
+
+The derivation for the sub-problem 4 initiates by applying the
+\rref{ad-andll}
+which selects the left part of the intersection type and reduces the
+problem to $[[(Int\/Bool\/String) *s Char/\Char]]$.
+\Rref{ad-andrr} further reduces the problem to
+$[[(Int\/Bool\/String) *s Char]]$.
+The \rref{ad-orll} finally generates the base
+cases for the derivation. All of the base cases trivially hold
+which concludes successful derivation for
+$[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Char/\Char]]$.
+
+% \begin{mathpar}
+%   \inferrule*
+%   { \inferrule*
+%     { \inferrule*
+%       { \inferrule*
+%         { }
+%         {[[Int <=u (Int\/Bool\/String) u=> Bool\/String]]}
+%         \inferrule*
+%         { }
+%         {[[Int *s Char]]}
+%         \inferrule*
+%         { \inferrule*
+%           { }
+%           {[[Bool <=u Bool\/String u=> String]]}
+%           \inferrule*
+%           { }
+%           {[[Bool *s Char]]}
+%           \inferrule*
+%           { }
+%           {[[String *s Char]]}
+%         }
+%         {[[Bool\/String *s Char]]}
+%       }
+%       {[[(Int\/Bool\/String) *s Char]]}
+%     }
+%     {[[(Int\/Bool\/String) *s Char/\Char]]}
+%   }
+%   {[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Char/\Char]]}
+% \end{mathpar}
+
+\paragraph{Derivation for (8) \mathcolorbox{lightgray}{[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Int/\Int]]}:}
+The derivation for sub-problem 8 follows a similar path as of sub-problem 4.
+Complete derivation for sub-problem 8 is shown below:
+
+\begin{mathpar}
+  \inferrule* [Right=\rref*{ad-andlss}]
+  { \inferrule* [Right=\rref*{ad-andrr}]
+    { \inferrule* [Right=\rref*{ad-orl}]
+      { \inferrule*
+        { \inferrule*
+          { }
+          {[[Bool *s Int]]} \\
+          \inferrule* [Right=\rref*{ad-orl}]
+          { \inferrule*
+            { \inferrule*
+              { }
+              {[[String *s Int]]} \\
+              \inferrule*
+              { }
+              {[[Char *s Int]]}
+            }
+            {[[String <=u String\/Char u=> Char]]}
+          }
+          {[[(String\/Char) *s Int]]}
+        }
+        {[[Bool <=u (Bool\/String\/Char) u=> String\/Char]]}
+      }
+      {[[(Bool\/String\/Char) *s Int]]}
+    }
+    {[[(Bool\/String\/Char) *s Int/\Int]]}
+  }
+  {[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s Int/\Int]]}
+\end{mathpar}
+
+% \begin{lstlisting}
+
+%           ---------  -----------
+%           Bool*Char  String*Char
+% -------   --------------------
+% Int*Char  (Bool|String) * Char
+% -------------------------------
+% (Int|Bool|String) * Char
+% -------------------------------
+% (Int|Bool|String) * Char/\Char
+% -----------------------------------------------------
+% (Int|Bool|String) /\ (Bool|String|Char) * Char/\Char
+
+
+
+%           ----------  --------
+%           String*Int  Char*Int
+% --------  ---------------------
+% Bool*Int  String|Char * Int
+% --------------------------
+% (Bool|String|Char) * Int
+% -----------------------------
+% (Bool|String|Char) * Int/\Int
+% --------------------------------------------------
+% (Int|Bool|String) /\ (Bool|String|Char) * Int/\Int
+% \end{lstlisting}
+
+\noindent Since the newly formulated disjointness algorithm
+solved all of the sub-problems, therefore
+$[[(Int\/Bool\/String) /\ (Bool\/String\/Char) *s (String\/Char\/Int) /\ (Char\/Int\/Bool)]]$
+holds.
+The successful derivation for this example shows that
+the novel disjointness algorithm with union ordinary
+and union splittable types shown in \Cref{fig:union:rev:disj}
+is able to compute the disjointness of the types on which
+naive algorithm shown in \Cref{fig:union:rev:disj:naive} fails.
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     %\drules[s]{$[[A <: B]]$}{Subtyping}{top, int, bot, null, arrow, ora, orb, orc, anda, andb, andc}
+%     %\drules[typ]{$[[G |- e : A]]$}{Typing}{int, null, var, app, sub, abs, and, switch}
+%     \drules[step]{$[[e --> e']]$}{Operational Semantics}{appl, appr, beta, switch, switchl, switchr}
+%   \end{small}
+%   \caption{Operational semantics for \name.}
+%   \label{fig:union:rev:subtypos}
+% \end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph{Soundness and completeness of disjointness.}
+We prove that the novel disjointness algorithm is sound and complete
+with respect to the disjointness specifications.
+The disjointness specifications are shown again in \Cref{def:inter:rev:disj}
+for readability.
+
+\begin{center}
+\begin{tabular}{lcl} \toprule
+  $[[Aord]], [[Bord]], [[Cord]]$ & $\Coloneqq$ & $ [[Int]] \mid [[Null]] \mid [[A->B]] $ \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{definition}[$[[/\]]$-Disjointness]
+\label{def:inter:rev:disj}
+  % A $*_s$ B $\Coloneqq$ $\forall$ C, \ $[[ordinary C]]$ \ $\Longrightarrow$ \ $\neg([[C <: A]]$ and $[[C <: B]]$).
+  $[[A *s B]]$ $\Coloneqq$ $\nexists$ $[[Cord]]$, $[[Cord <: A]]$ and $[[Cord <: B]]$.
+\end{definition}
+
+\begin{lemma}[Soundness of disjointness algorithm]
+  $\forall$ $[[A]]$ $[[B]]$, $[[A * B]]$ $\rightarrow$ $[[A *s B]]$.
+\label{lemma:union:rev:disj:sound}
+\end{lemma}
+
+
+\begin{lemma}[Completeness of disjointness algorithm]
+  $\forall$ $[[A]]$ $[[B]]$, $[[A *s B]]$ $\rightarrow$ $[[A * B]]$.
+\label{lemma:union:rev:disj:complete}
+\end{lemma}
+
+
+\subsection{Metatheory with Union Ordinary and Union Splittable Types}
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[!h]
+  \begin{small}
+    \centering
+    %\drules[s]{$[[A <: B]]$}{Subtyping}{top, int, bot, null, arrow, ora, orb, orc, anda, andb, andc}
+    \drules[typ]{$[[G |- e : A]]$}{Typing}{int, null, var, app, sub, abs, and, switch}
+    \drules[step]{$[[e --> e']]$}{Operational Semantics}{appl, appr, beta, switch, switchl, switchr}
+  \end{small}
+  \caption{Typing and operational semantics for \name.}
+  \label{fig:union:rev:subtypos}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\paragraph{Typing and operational semantics.}
+Subtyping, typing and operational semantics essentially stay the same
+and are shown in \Cref{fig:union:rev:subtypos}.
+This calculus preserves the standard properties of subtyping, type-safety and
+determinism as shown below:
+
+\begin{lemma}[Subtyping Reflexivity]
+  $[[A <: A]]$
+\label{lemma:union:rev:sub:refl}
+\end{lemma}
+
+\begin{lemma}[Subtyping Transitivity]
+  If $[[A <: B]]$ and $[[B <: C]]$ then $[[A <: C]]$
+\label{lemma:union:rev:sub:trans}
+\end{lemma}
+
+\begin{theorem}[Type Preservation]
+\label{lemma:union:rev:simpl:preservation}
+  If \ $[[G |- e : A]]$ and $[[e --> e']]$ then $[[G |- e' : A]]$.
+\end{theorem}
+
+\begin{theorem}[Progress]
+\label{lemma:union:rev:simpl:progress}
+If \ $[[G |- e : A]]$ then either $[[e]]$ is a value;
+or $[[e]]$ can take a step to $[[e']]$.
+\end{theorem}
+
+\begin{theorem}[Determinism]
+\label{lemma:union:rev:simpl:determinism}
+  If \ $[[G |- e : A]]$ and \ $[[e --> e1]]$ and \ $[[e --> e2]]$ then $[[e1]]$ = $[[e2]]$.
+\end{theorem}
+
+
+
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \drules[typ]{$[[PG ; G |- e : A]]$}{Typing}{int, null, var, app, sub, abs, and, switch}
+%   \end{small}
+%   \caption{Typing for \name.}
+%   \label{fig:union:rev:typ}
+% \end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \drules[polystep]{$[[PG ; G |- e --> e']]$}{Operational Semantics}{appl, appr, beta, tappl, tapp, switch, switchl, switchr}
+%   \end{small}
+%   \caption{Operational Semantics for \name.}
+%   \label{fig:union:rev:red}
+% \end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \drules[uo]{$[[UO A]]$}{Union Ordinary Types}{top,int,arrow,unit,and,all}
+%   \end{small}
+%   \caption{Union ordinary and union splittable types.}
+%   \label{fig:disj:poly:uo}
+% \end{figure}
+
+%---------------------------------------------------------------------------%%
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+      \begin{center}
+        \begin{tabular}{rcl}
+          \toprule
+          $[[A]], [[B]]$, $[[C]]$ & $\Coloneqq$ & $ [[Top]] \mid [[Bot]] \mid [[Int]] \mid [[A -> B]] \mid [[Null]] \mid [[A \/ B]] \mid [[A /\ B]] \mid [[P]] \mid [[a]] ~ \mid ~ [[\A . B]] $ \\
+          $[[e]]$ & $\Coloneqq$ & $ [[x]] \mid [[i]] \mid [[\x.e]] \mid [[e1 e2]] \mid [[switch e A e1 B e2]] \mid [[null]] \mid$ \\
+                  &             & $[[new P]] \mid ~ [[e A]] ~ \mid ~ [[\ A . e]] $\\
+          $[[v]]$ & $\Coloneqq$ & $ [[i]] \mid [[\x.e]] \mid [[null]] \mid [[new P]] \mid ~ [[\ A . e]] $\\
+          $[[G]]$ & $\Coloneqq$ & $ \cdot \mid [[G , x : A]] \mid ~ [[G , a * A]] $ \\
+          $[[PG]]$ & $\Coloneqq$ & $ \cdot \mid [[PG , P <~ A]]$ \\
+          \bottomrule
+        \end{tabular}
+      \end{center}
+    \end{small}
+
+  \begin{small}
+    \centering
+    \drules[uo]{$[[UO A]]$}{Union Ordinary Types}{top,int,arrow,unit,and,tvar,all,nom}
+    \drules[usp]{$[[B <=u A u=> C]]$}{Union Splittable Types}{or,orandl,orandr}
+  \end{small}
+  \caption{Syntax, union ordinary, and union splittable types for polymorphic \name.}
+  \label{fig:union:rev:poly:uo}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%% Redesigning Disjoint Polymorphism %%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{Redesigning Disjoint Polymorphism}
+\label{sec:rev:disjoint:disjpoly}
+% \baber{Talk about a system with polymorphism, intersection and union types.}
+In \Cref{sec:union:disj:union:inter} we discuss 
+a novel disjointness algorithm by exploiting 
+union ordinary and union splittable types.
+We show that the disjointness algorithm is sound and
+complete with respect to the disjointness specifications.
+In this section we extend the calculus from 
+\Cref{sec:union:disj:union:inter} with disjoint
+polymorphism. Importantly, we show that the ground type 
+restriction on type variable bounds is no longer needed 
+with the novel disjointness algorithm.
+% We discuss the technical details next.
+
+\paragraph{Syntax, union ordinary, and union splittable types.}
+The syntax for polymorphic \name is shown at the top in 
+\Cref{fig:union:rev:poly:uo}. Types are extended with the
+nominal types $[[P]]$, type variables $[[a]]$, and
+disjoint quantifiers $[[\A . B]]$.
+The syntactic category of expressions now include a new expression ($[[new P]]$)
+to construct instances of type $[[P]]$. It also includes type applications
+$[[e A]]$ and type abstractions $[[\ A . e]]$.
+Expressions $[[new P]]$ and $[[\ A . e]]$ are also values.
+Typing context $[[G]]$ also has entries for type variables
+$[[G , a * A]]$.
+A new context $[[PG]]$ keeps a list and bounds of nominal types.
+
+
+Union ordinary types are shown in the middle of
+\Cref{fig:union:rev:poly:uo}.
+Union ordinary types are extended with type variables (\rref{uo-tvar}),
+disjoint quantifiers (\rref{uo-all}) and nominal types (\rref{uo-nom}).
+Union splittable types stay the same as in \Cref{fig:disj:usp:uo}
+and are shown at the bottom of \Cref{fig:union:rev:poly:uo}.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{Disjointness}
+The disjointness algorithm with polymorphism
+is shown in \Cref{fig:union:rev:poly:disj}.
+% \Rref{adp-allintl,adp-allintr,adp-allarl,adp-allarrr,adp-allnulll,adp-allnullr,adp-varr,adp-varl}
+% are the newly added rules for 
+% universal types and type variables.
+In addition to the prior axioms, we also add axioms for
+universal types and the nominal types.
+Universal types are disjoint to all the base types and
+so are the nominal types.
+Type variables are disjoint to all the subtypes of its 
+bound as shown in \rref{adp-varr,adp-varl}.
+For example in a context [$[[G, a * Top]]$], $[[a]]$ 
+is essentially disjoint to all the types
+because all the types are subtype of $[[Top]]$.
+In another context [$[[G, a * Int\/Bool]]$], 
+$[[a]]$ is disjoint with all the subtypes of 
+$[[Int\/Bool]]$ including $[[Int]]$ and $[[Bool]]$
+but is not disjoint to $[[String]]$.
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[!h]
+  \begin{small}
+    \centering
+    \drules[adpa]{$[[PG ; G |- A *ax B]]$}{Disjointness Axioms}{bot,intarr,intnull,intall,nullarr,nullall,arrall,pint,parr,pnull,pall,sym}
+    \drules[adp]{$[[PG ; G |- A * B]]$}{Disjointness}{varr,orl,varl,orr,andl,andls,andr,andrs,nom,axiom}
+  \end{small}
+  \caption{Disjointness with union splittable types for polymorphic \name.}
+  \label{fig:union:rev:poly:disj}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+Note that we scrap the optional union ordinary premise from
+\rref{adp-andl,adp-andls,adp-andr,adp-andrs}. This simplifies
+the metatheory with the type variables.
+We also drop \rref{adp-emptyl,adp-emptyr} from disjointness algorithm
+in \Cref{fig:union:rev:poly:disj}.
+Dropping \rref{adp-emptyl,adp-emptyr} restricts writing some
+programs but all the practical programs still type-check.
+Generally, it does not allow writing empty intersection
+types in branches. For example, the following program
+will no longer type-check because of the
+empty type in the first branch i.e $[[Int/\Bool]]$.
+
+\begin{lstlisting}[language=Scala]
+  Bool isInt (x : Int | Bool) = switch (x)
+                                  (x:Int&Bool) -> true
+                                  (y:Int)      -> true
+                                  (z:Bool)     -> false
+\end{lstlisting}
+
+\noindent Since we cannot construct a value of type $[[Int/\Bool]]$
+in contemporary system, the
+first branch in the above program has no practical significance.
+Therefore not allowing such empty intersections does not
+affect the programs in practice.
+
+
+\paragraph{Disjointness for nominal types.}
+The disjointness rule for nominal types (\rref{adp-nom}) is interesting.
+It states that two nominal types $[[P1]]$ and $[[P2]]$ are disjoint
+if the intersection of their subtypes is an empty set.
+Nominal subtypes ($[[nominalsub PG A]]$) is a function that
+finds the subtypes of type $[[A]]$ in $[[PG]]$ and returns a list.
+Note that nominal subtypes is a transitive closure.
+Nominal subtypes function is shown next:
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{center}
+    \begin{tabular}{c}
+      {\renewcommand{\arraystretch}{1.5}
+       \begin{tabular}{|lll|}
+        \multicolumn{3}{c}{Nominal Subtypes \fbox{$[[nominalsub PG A]]$}} \\[0.8mm]
+        \hline
+        $[[nominalsub [] A]]$ & = & $\{\}$ \\
+        \multirow{2}{*}{$[[nominalsub (PG', P <: B) A]]$} & \ldelim\{{2}{*}[=] & $\{[[P]]\} \cup [[nominalsub PG' A]]$ {\textbf{if}} $[[isnominalsub PG P A]]$ \\
+                                                               & & $[[nominalsub PG' A]]$ \textbf{otherwise} \\
+        \hline
+        \end{tabular} }
+    \end{tabular}
+\end{center}
+
+%---------------------------------------------------------------------------%%
+
+\noindent For example, in a context $[[PG]]$ = \{Person <: $[[Top]]$, 
+Student $[[<:]]$ Person, GradStudent $[[<:]]$ Student, Robot $[[<:]]$ $[[Top]]$,
+OptimumPrime $[[<:]]$ Robot\}:
+
+\begin{itemize}
+  \item Person is disjoint to Robot as per \rref{adp-nom}, 
+        because the set intersection of the subtypes of
+        Person and Robot is empty i.e \{Person, Student, GradStudent\} $\cap$
+        \{Robot, OptimumPrime\} = \{\}.
+  \item Whereas, Person is not disjoint to GradStudent, because the
+  set intersection
+        of the subtypes of Person and GradStudent is not empty i.e
+        \{Person, Student, GradStudent\} $\cap$ \{GradStudent\}
+        = \{GradStudent\}.
+\end{itemize}
+
+
+\paragraph{Contravariance of disjointness.}
+Contravariance of disjointness (\Cref{lemma:union:disj:poly:contra})
+states that if two types $[[A]]$ and $[[B]]$ are disjoint, then the
+subtypes of $[[A]]$ are also disjoint with $[[B]]$.
+In general subtypes of disjoint types are disjoint as well.
+For example if $[[A -> B]]$ is disjoint to $[[Int \/ Null]]$,
+then $[[A -> B]]$ is disjoint to both $[[Int]]$ and $[[Null]]$
+among other subtypes of $[[Int \/ Bool]]$.
+Similarly if a type $[[A]]$ is disjoint to $[[Top]]$,
+then $[[A]]$ is disjoint with all the types because all the types
+are subtypes of $[[Top]]$. 
+
+\begin{lemma}[Contravariance of disjointness]
+  If $[[PG ; G |- A * B]]$ and $[[PG ; G |- C <: A]]$ then $[[PG ; G |- C * B]]$.
+\label{lemma:union:disj:poly:contra}
+\end{lemma}
+
+
+\paragraph{Expressiveness of disjointness.}
+The novel disjointness algorithm allows 
+writing the programs that are not allowed
+in the polymorphic \name discussed in 
+\Cref{sec:discussion:poly} due to the ground type
+restriction.
+We can write the programs by
+declaring type variables as bounds of other type variables:
+
+\begin{lstlisting}[language=Scala]
+  Bool isFirstMatch [X * Y] (x : X | Y) = switch (x)
+                                            (x:X) -> true
+                                            (y:Y) -> false
+\end{lstlisting}
+
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[polys]{$[[PG ; G |- A <: B]]$}{Subtyping}{top, int, bot, unit, arrow, ora, orb, orc, anda, andb, andc, tvar, alldisj, prefl, pin}
+  \end{small}
+  \caption{Subtyping for \name.}
+  \label{fig:union:rev:poly:sub}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+\subsection{Subtyping, typing, and operational semantics}
+Subtyping, typing and operational semantics are altered to lift
+the ground type restriction on type variable bounds and are shown in 
+\Cref{fig:union:rev:poly:sub,fig:union:rev:poly:typ,fig:union:rev:poly:red}
+respectively. These relations have already been explained in 
+\Cref{sec:poly}. We highlight the major changes next.
+
+\paragraph{Modifications in metatheory.}
+The subtyping changes are reflected by \rref{polys-alldisj} in \Cref{fig:union:rev:poly:sub}.
+Note that first premise does not have ground type restriction.
+$[[A1]]$ and $[[A2]]$ can be any types.
+Typing changes are shown in \rref{ptyp-tapdisj,ptyp-tabsdisj} in \Cref{fig:union:rev:poly:typ}.
+Similarly, changes for operational semantics are shown in \rref{polystep-tappdisj} in
+\Cref{fig:union:rev:poly:red}. Importantly, we no longer use syntactic category
+of ground types and the bound of a type variable can be any other type.
+
+
+%---------------------------------------------------------------------------%%
+
+% \begin{figure}[t]
+%   \begin{small}
+%     \centering
+%     \drules[ptyp]{$[[PG ; G |- e : A]]$}{Typing}{int, null, var, app, sub, abs, and, switch, prim, tapdisj, tabsdisj}
+%   \end{small}
+%   \caption{Typing for \name.}
+%   \label{fig:union:rev:poly:typ}
+% \end{figure}
+
+%---------------------------------------------------------------------------%%
+
+
+% \subsection{Typing}
+% Subtyping essentially stays the same. Only difference is in the subtyping of
+% disjoint quantified types as stated in \rref{polys-alldisj}. This rule
+% no longer requires the type variable bounds to be ground types.
+% Subtyping substitution lemmas is stated as:
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    \drules[ptyp]{$[[PG ; G |- e : A]]$}{Typing}{int, null, var, app, sub, abs, and, switch, prim, tapdisj, tabsdisj}
+    %\drules[polystep]{$[[PG ; G |- e --> e']]$}{Operational Semantics}{appl, appr, beta, tappl, tappdisj, switch, switchl, switchr}
+  \end{small}
+  \caption{Operational Semantics for \name.}
+  \label{fig:union:rev:poly:typ}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+%---------------------------------------------------------------------------%%
+
+\begin{figure}[t]
+  \begin{small}
+    \centering
+    %\drules[ptyp]{$[[PG ; G |- e : A]]$}{Typing}{int, null, var, app, sub, abs, and, switch, prim, tapdisj, tabsdisj}
+    \drules[polystep]{$[[PG ; G |- e --> e']]$}{Operational Semantics}{appl, appr, beta, tappl, tappdisj, switch, switchl, switchr}
+  \end{small}
+  \caption{Operational Semantics for \name.}
+  \label{fig:union:rev:poly:red}
+\end{figure}
+
+%---------------------------------------------------------------------------%%
+
+% \subsection{Operational semantics}
+% Subtyping essentially stays the same. Only difference is in the subtyping of
+% disjoint quantified types as stated in \rref{polys-alldisj}. This rule
+% no longer requires the type variable bounds to be ground types.
+% Subtyping substitution lemmas is stated as:
+
+\paragraph{Type safety and determinism.}
+Polymorphic \name with updated disjointness preserves standard properties
+of subtyping, type-safety and determinism.
+
+\begin{lemma}[Subtyping Reflexivity]
+  $[[PG ; G |- A <: A]]$
+\label{lemma:union:rev:poly:sub:refl}
+\end{lemma}
+
+\begin{lemma}[Subtyping Transitivity]
+  If $[[PG ; G |- A <: B]]$ and $[[PG ; G |- B <: C]]$ then $[[PG ; G |- A <: C]]$
+\label{lemma:union:rev:poly:sub:trans}
+\end{lemma}
+
+\begin{theorem}[Type Preservation]
+\label{lemma:union:rev:poly:preservation}
+  If \ $[[PG , G |- e : A]]$ and $[[PG ; G |- e --> e']]$ then $[[PG , G |- e' : A]]$.
+\end{theorem}
+
+\begin{theorem}[Progress]
+\label{lemma:union:rev:poly:progress}
+If \ $[[PG , [] |- e : A]]$ then either $[[e]]$ is a value;
+or $[[e]]$ can take a step to $[[e']]$.
+\end{theorem}
+
+\begin{theorem}[Determinism]
+\label{lemma:union:rev:poly:determinism}
+  If \ $[[PG , G |- e : A]]$ and \ $[[PG ; G |- e --> e1]]$ and \ $[[PG ; G |- e --> e2]]$ then $[[e1]]$ = $[[e2]]$.
+\end{theorem}
+
+\paragraph{Substitution lemmas.}
+Type preservation depends on type substitution 
+(\Cref{lemma:typ:rev:poly:subst}) which
+in turn depends on 
+subtyping substitution (\Cref{lemma:sub:rev:poly:subst}) and
+disjointness substitution (\Cref{lemma:disj:rev:poly:subst}).
+\Cref{lemma:typ:rev:poly:subst} states that if in a context
+where $[[a]]$ is disjoint to $[[A1]]$,
+an expression $[[e]]$ has type $[[B]]$ and
+$[[A2]]$ is disjoint to $[[A1]]$, then
+$[[e]]$ has type $[[B]]$ after substituting $[[a]]$
+with $[[A2]]$ in the context $[[G]]$, expression $[[e]]$
+and type $[[B]]$.
+
+\Cref{lemma:sub:rev:poly:subst} states that if in a context
+where $[[a]]$ is disjoint to $[[A1]]$,
+type $[[B]]$ is subtype of type $[[C]]$ and
+$[[A2]]$ is disjoint to $[[A1]]$, then
+$[[B]]$ stays subtype of $[[C]]$ after substituting $[[a]]$
+with $[[A2]]$ in context $[[G]]$, type $[[B]]$
+and type $[[C]]$.
+Similarly, \Cref{lemma:disj:rev:poly:subst} 
+states that if in an environment where type variable $[[a]]$
+is disjoint to $[[A1]]$, type $[[B]]$ is disjoint to type $[[C]]$ and
+$[[A2]]$ is disjoint to $[[A1]]$, then $[[B]]$ stays disjoint to $[[C]]$
+after substituting $[[a]]$ with $[[A2]]$ in environment $[[G]]$,
+type $[[B]]$ and type $[[C]]$.
+Notice that substitution lemmas no longer depend upon ground types.
+
+
+\begin{lemma}[Typing Substitution]\label{lemma:typ:rev:poly:subst}
+  If $[[PG ; G , a * A1 |- e : B]]$ and $[[PG ; G |- A2 * A1]]$
+  then $[[PG ; G [ a := A2 ] |-  e [ a ~> A2 ] : B [ a := A2 ] ]]$
+\end{lemma}
+
+\begin{lemma}[Subtyping Substitution]\label{lemma:sub:rev:poly:subst}
+  If $[[PG ; G , a * A1 |- B <: C]]$ and $[[PG ; G |- A2 * A1]]$
+  then $[[PG ; G [ a := A2 ] |-  B [ a := A2 ] <: C [ a := A2 ] ]]$
+\end{lemma}
+
+\begin{lemma}[Disjointness Substitution]\label{lemma:disj:rev:poly:subst}
+  If $[[PG ; G , a * A1 |- B * C]]$ and $[[PG ; G |- A2 * A1]]$
+  then $[[PG ; G [ a := A2 ] |-  B [ a := A2 ] * C [ a := A2 ] ]]$
+\end{lemma}
+
+% \begin{lemma}[Disjointness Narrowing]\label{lemma:disj:rev:poly:narrow}
+%   If $[[PG ; G , a * A1 |- B * C]]$ and $[[PG ; G |- A1 <: A2]]$
+%   then $[[PG ; G , a * A2 |- B * C]]$
+% \end{lemma}
+
+\paragraph{Narrowing lemmas.}
+%\baber{revise and add text for narrowing lemmas.}
+Narrowing lemmas for polymorphic \name are interesting to discuss.
+Typing narrowing, subtyping narrowing, and disjointness narrowing
+are stated as \Cref{lemma:typ:rev:poly:narrow}, 
+\Cref{lemma:sub:rev:poly:narrow}, and 
+\Cref{lemma:disj:rev:poly:narrow} respectively.
+Narrowing lemmas essentially explain the relation between
+disjointness and subtyping. In general, they state that it is
+safe to replace the bound of a type variable with a supertype of
+it's existing bound.
+Typing narrowing (\Cref{lemma:typ:rev:poly:narrow}) states that
+if in a context
+where $[[a]]$ is disjoint to $[[A1]]$,
+an expression $[[e]]$ has type $[[B]]$ and
+$[[A1]]$ is subtype of $[[A2]]$, then
+$[[e]]$ still has type $[[B]]$ after replacing
+the bound of $[[a]]$ with $[[A2]]$. 
+
+Subtyping narrowing (\Cref{lemma:sub:rev:poly:narrow}) states that
+if in a context
+where $[[a]]$ is disjoint to $[[A1]]$,
+type $[[B]]$ is a subtype of type $[[C]]$ and
+$[[A1]]$ is subtype of $[[A2]]$, then
+$[[B]]$ stays subtype of $[[C]]$ after replacing
+the bound of $[[a]]$ with $[[A2]]$.
+Similarly, disjointness narrowing 
+(\Cref{lemma:disj:rev:poly:narrow})
+states that if we update the bound of a type variable with a
+subtype of its current bound, then it does not affect disjointness.
+Types $[[A]]$ and $[[B]]$ stay disjoint if we update the bound of
+type variable $[[a]]$ from $[[A1]]$ to its subtype $[[A2]]$.
+
+\begin{lemma}[Typing narrowing]\label{lemma:typ:rev:poly:narrow}
+  % If $[[PG ; G , a * A1 |- B * C]]$ and $[[PG ; G |- A1 <: A2]]$
+  % then $[[PG ; G , a * A2 |- B * C]]$
+  If $[[PG ; G , a * A1 |- e : B]]$ and $[[PG ; G |- A1 <: A2]]$
+  then $[[PG ; G , a * A2 |- e : B]]$
+\end{lemma}
+
+\begin{lemma}[Subtyping narrowing]\label{lemma:sub:rev:poly:narrow}
+  % If $[[PG ; G , a * A1 |- B * C]]$ and $[[PG ; G |- A1 <: A2]]$
+  % then $[[PG ; G , a * A2 |- B * C]]$
+  If $[[PG ; G , a * A1 |- B <: C]]$ and $[[PG ; G |- A1 <: A2]]$
+  then $[[PG ; G , a * A2 |- B <: C]]$
+\end{lemma}
+
+\begin{lemma}[Disjointness narrowing]\label{lemma:disj:rev:poly:narrow}
+  If $[[PG ; G , a * A1 |- B * C]]$ and $[[PG ; G |- A1 <: A2]]$
+  then $[[PG ; G , a * A2 |- B * C]]$
+\end{lemma}
+
+\paragraph{Weakening lemmas.}
+%\baber{revise and add text for weakening lemmas.}
+Weakening lemmas for polymorphic \name are stated as
+typing weakening (\Cref{lemma:typ:rev:poly:weak}), 
+subtyping weakening (\Cref{lemma:sub:rev:poly:weak}), 
+and disjointness weakening (\Cref{lemma:disj:rev:poly:weak}).
+Weakening lemmas state that if a relation is valid in a smaller
+context, then it stays valid in an enlarged context given
+that the enlarged context is well-formed.
+Typing weakening (\Cref{lemma:typ:rev:poly:weak}) states that
+if in a smaller context [$[[G1]]$, $[[G2]]$],
+an expression $[[e]]$ has type $[[B]]$ and an
+enlarged context
+[$[[G1]]$, $[[G3]]$, $[[G2]]$] is well-formed, then
+$[[e]]$ still has type $[[B]]$ in the extended context
+[$[[G1]]$, $[[G3]]$, $[[G2]]$].
+
+Subtyping weakening (\Cref{lemma:sub:rev:poly:weak}) states that
+if in a smaller context [$[[G1]]$, $[[G2]]$],
+type $[[B]]$ is a subtype of type $[[C]]$ and
+an enlarged context
+[$[[G1]]$, $[[G3]]$, $[[G2]]$] is well-formed, then
+$[[B]]$ stays subtype of $[[C]]$ in the extended context
+[$[[G1]]$, $[[G3]]$, $[[G2]]$].
+Similarly, disjointness weakening 
+(\Cref{lemma:disj:rev:poly:weak})
+states that
+if in a smaller context [$[[G1]]$, $[[G2]]$],
+type $[[B]]$ is disjoint to type $[[C]]$ and an enlarged context
+[$[[G1]]$, $[[G3]]$, $[[G2]]$] is well-formed, then
+$[[B]]$ stays disjoint to $[[C]]$ in the extended context
+[$[[G1]]$, $[[G3]]$, $[[G2]]$].
+
+\begin{lemma}[Typing weakening]\label{lemma:typ:rev:poly:weak}
+  If $[[PG]]$; $[[G1]]$, $[[G2]]$ $[[|-]]$ $[[e : B]]$ and ok $[[G1]]$, $[[G3]]$, $[[G2]]$
+  then $[[PG]]$; $[[G1]]$, $[[G3]]$, $[[G2]]$ $[[|-]]$ $[[e : B]]$
+\end{lemma}
+
+\begin{lemma}[Subtyping weakening]\label{lemma:sub:rev:poly:weak}
+  If $[[PG]]$; $[[G1]]$, $[[G2]]$ $[[|-]]$ $[[B <: C]]$ and ok $[[G1]]$, $[[G3]]$, $[[G2]]$
+  then $[[PG]]$; $[[G1]]$, $[[G3]]$, $[[G2]]$ $[[|-]]$ $[[B <: C]]$
+\end{lemma}
+
+\begin{lemma}[Disjointness weakening]\label{lemma:disj:rev:poly:weak}
+  If $[[PG]]$; $[[G1]]$, $[[G2]]$ $[[|-]]$ $[[B *s C]]$ and ok $[[G1]]$, $[[G3]]$, $[[G2]]$
+  then $[[PG]]$; $[[G1]]$, $[[G3]]$, $[[G2]]$ $[[|-]]$ $[[B *s C]]$
+\end{lemma}
+
+\paragraph{More auxiliary lemmas.}
+We discuss a few more interesting auxiliary lemmas in this paragraph.
+\Cref{lemma:rev:poly:uo:usp:sub}, \Cref{lemma:rev:poly:wft:usp},
+\Cref{lemma:rev:poly:disj:symmetry} and \Cref{lemma:rev:poly:disj:exclusive}
+are essential in proving the metatheory and are shown next.
+\Cref{lemma:rev:poly:uo:usp:sub} states that if a
+union ordinary type $[[UO A]]$ is a subtype of union splittable
+type $[[B]]$ ($[[B1 <=u B u=> B2]]$), then $[[A]]$ is either subtype of
+$[[B1]]$ or $[[B2]]$.
+\Cref{lemma:rev:poly:wft:usp} states that if a union splittable type
+$[[A]]$ ($[[A1 <=u A u=> A2]]$) is well-formed, then both
+$[[A1]]$ and $[[A2]]$ are well-formed.
+\Cref{lemma:rev:poly:disj:symmetry} states disjointness symmetry.
+Finally, \Cref{lemma:rev:poly:disj:exclusive} states that
+if $[[A]]$ and $[[B]]$ are disjoint types, then this is not the case
+that a value $[[v]]$ checks against both $[[A]]$ and $[[B]]$. 
+
+
+\begin{lemma}[Subtyping inversion of union ordinary and union splittable types]\label{lemma:rev:poly:uo:usp:sub}
+  If $[[PG ; G |- A <: B]]$ and $[[B1 <=u B u=> B2]]$ and $[[UO A]]$
+  then $[[PG ; G |- A <: B1]]$ $\vee$ $[[PG ; G |- A <: B2]]$.
+\end{lemma}
+
+\begin{lemma}[Well-formedness inversion of union splittable types]\label{lemma:rev:poly:wft:usp}
+  If $[[PG ; G |- A]]$ and $[[A1 <=u A u=> A2]]$
+  then $[[PG ; G |- A1]]$ $\wedge$ $[[PG ; G |- A2]]$.
+\end{lemma}
+
+\begin{lemma}[Disjointness symmetry]\label{lemma:rev:poly:disj:symmetry}
+  If $[[PG ; G |- A * B]]$
+  then $[[PG ; G |- B * A]]$.
+\end{lemma}
+
+\begin{lemma}[Exclusivity of Disjoint Types]\label{lemma:rev:poly:disj:exclusive}
+  If $[[PG ; G |- A * B]]$ then $\nexists$ $[[v]]$ such that both
+  $[[PG ; G |- v : A]]$ and $[[PG ; G |- v : B]]$ holds.
+\end{lemma}
+
+
+% \paragraph{Type substitution and subtyping narrowing.}
+% \baber{update and explain following two lemmas.}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../Thesis"
+%%% org-ref-default-bibliography: "../Thesis.bib"
+%%% End:

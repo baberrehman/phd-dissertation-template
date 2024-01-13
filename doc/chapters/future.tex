@@ -1,0 +1,516 @@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Conclusion and Future Work}
+\label{chap:future}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% We examined intersection types and union types in various settings in this thesis.
+% This involves a type-sound calculus with first-class intersection types and union types.
+% First calculus lacks determinism. Second calculus is developed without
+% merge operator. This calculus is type-sound and deterministic. Merge operator
+% and type-based switch expression induce non-determinism together. A parallel work
+% to solve non-coherence problem in the presence of merge operator is
+% disjoint intersection types \cite{}.
+
+\section{Conclusion}
+
+The integration of the intersection and union
+types is known to be non-trivial in theory.
+This thesis examines the integration of
+intersection and union types in
+various settings. \Cref{chap:switch} (\name)
+discusses the deterministic elimination of
+union types with a type-based switch construct.
+The disjointness plays the essential role
+in making such a construct deterministic.
+The disjointness ensures that no two
+types in alternative branches overlap i.e.
+do not share a common subtype. Therefore,
+the type of the scrutinee matches with one branch
+at the most. Later sections in \Cref{chap:switch}
+further enrich \name with advance features
+including intersection types, nominal types,
+subtyping distributivity and disjoint polymorphism.
+\Cref{chap:disjointness} discusses an
+expressive version of the disjointness algorithm
+with disjoint polymorphism.
+All of the calculi discussed in \Cref{chap:switch}
+and \Cref{chap:disjointness} preserve the
+standard properties of type-safety and determinism.
+
+\Cref{chap:merge} studies a calculus (\namems) with
+an elimination construct for the union types
+and an introductory construct for the intersection types,
+the so called merge operator.
+\namems is type-safe but lacks
+determinism. We also prove the completeness of \namems
+with respect to \cite{dunfield2014elaborating}.
+\Cref{chap:duo} discusses \nameduo,
+a novel technique studied to unify the subtyping rules
+for the dual features such as intersection
+types and union types. \nameduo comes with
+certain benefits of reduced subtyping rules,
+easier proofs and metatheory,
+and extra features such as lower bounded
+quantification. We study \nameduo with various
+calculi to show that it is a practically
+applicable technique.
+
+% We explored the duality of subtyping in second part of this thesis.
+% We show that duality comes with certain benefits including
+% shorter specification, extra features and easier proof techniques.
+% We also show that \nameduo is a practically applicable technique by studying it
+% with a number of calculi.
+
+% One future line of work is studying merge operator and switch together and make
+% them deterministic. We have discussed a few techniques to deal with the
+% non-determinitic problem in section \ref{}.
+% \baber{talk briefly about the techniques.}
+
+
+\section{Future Work}
+
+
+\subsection{Determinism for \namems}
+\label{future:proposals}
+
+Future work includes making the calculus
+discussed in \Cref{chap:merge} (\namems) deterministic.
+We discuss a few proposals to make \namems
+deterministic.
+Approaches include restricting subsumption
+rule to prohibit certain ambiguous upcasts,
+first-match semantics, and parallel application.
+%of the branches that pass the type test.
+
+%---------------------------------------------------%%
+
+%%%%%%%%% Remediations for Non-determinism %%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+
+% \section{Proposals for deterministic \namems}
+% \label{future:proposals}
+
+%\baber{Remediation should be a part of future work?}
+
+\subsubsection{Proposal 1: restricting ambiguous upcasts}
+
+The meticulous observation concludes that the
+origin of non-determinism is primarily due to multiple upcast paths.
+For example, $[[1,,true]]$ can follow two paths to upcast
+to $[[Int\/Bool]]$. One is via $[[Int]]$ and the other is via $[[Bool]]$.
+Our first proposal to deal with non-determinism is to reject
+the programs when there are multiple upcast paths involved.
+In this approach the following program will be rejected:
+
+\begin{lstlisting}[language=Scala]
+  Bool isInt (x : Int | Bool) = switch (x)
+                                  (x:Int)  -> true
+                                  (y:Bool) -> false
+
+  isInt(1,,true) //rejected
+\end{lstlisting}
+
+\noindent We propose restricting subsumption rule with an extra condition
+so that it allows only unambiguous upcasts along with disjointness
+in merges and switches. Such a calculus will have three measures
+for determinism. One is the disjointness in switches, another is the
+disjointness in merges, and finally an extra restriction in
+subsumption rule to reject ambiguous upcasts. The revised subsumption
+rule is shown next:
+
+%\baber{discuss restricted subsumption rule and unambuguos relation.}
+
+\begin{mathpar}
+  \inferrule*[Right=typ-sub-res]
+    { [[G |- e: A]] \and
+      [[A <: B]] \and
+      \mathcolorbox{lightgray}{[[A]] <_u [[B]]}
+    }
+    {[[G |- e:B]]}
+\end{mathpar}
+
+\noindent Where, $\mathcolorbox{lightgray}{[[A]] <_u [[B]]}$
+indicates type $[[A]]$
+is unambiguous to type $[[B]]$. Meaning that there is at most one path
+to upcast from $[[A]]$ to $[[B]]$.
+Ideally, this relation allows upcasting $[[1:Int]]$ to $[[1:Int\/Bool]]$.
+But it does not allow upcasting $[[1,,true : Int/\Bool]]$
+to $[[1,,true : Int \/ Bool]]$. This is because $[[1:Int]]$
+upcasts to $[[1:Int\/Bool]]$ via only one path i.e.:
+
+\begin{mathpar}
+  \inferrule*[Right=\rref*{typ-sub}]
+    { [[G |- 1: Int]] \and
+      [[Int <: Int\/Bool]]
+    }
+    {[[G |- 1:Int\/Bool]]}
+\end{mathpar}\noindent
+
+\noindent Whereas, $[[1,,true]]$ has two paths to upcast to $[[Int\/Bool]]$,
+one via $[[Int]]$ and the other via $[[Bool]]$.
+
+\begin{itemize}
+  \item[\textbf{1)}] \textbf{First path:} Upcast of $[[1,,true]]$ to $[[Int\/Bool]]$ via $[[Int]]$:
+\end{itemize}
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{typ-sub}]
+    { \inferrule* [Left=\rref*{typ-merga}]
+        { }
+        {[[1,,true : Int/\Bool]]} \\
+      \inferrule*  [Right=\rref*{s-orb}]
+        { \inferrule* [Right=\rref*{s-andb}]
+          {
+            [[Int <: Int]]
+          }
+          {[[Int/\Bool <: Int]]}
+        }
+        {[[Int/\Bool <: Int \/ Bool]]}
+    }
+    {[[G |- 1,,true : Int\/Bool]]}
+\end{mathpar}
+
+
+\begin{itemize}
+  \item[\textbf{2)}] \textbf{Second path:} Upcast of $[[1,,true]]$ to $[[Int\/Bool]]$ via $[[Bool]]$:
+\end{itemize}
+
+\begin{mathpar}
+  \inferrule* [Left=\rref*{typ-sub}]
+    { \inferrule* [Left=\rref*{typ-merga}]
+        { }
+        {[[1,,true : Int/\Bool]]} \\
+      \inferrule* [Right=\rref*{s-orc}]
+        { \inferrule* [Right=\rref*{s-andc}]
+          {
+            [[Bool <: Bool]]
+          }
+          {[[Int/\Bool <: Bool]]}
+        }
+        {[[Int/\Bool <: Int \/ Bool]]}
+    }
+    {[[G |- 1,,true : Int\/Bool]]}
+\end{mathpar}
+
+\noindent Therefore the upcast of $[[1,,true]]$ to $[[Int\/Bool]]$
+is rejected with
+the restricted subsumption rule.
+The essence of restricted subsumption rule is to reject the
+programs that may be a cause of non-determinism in switch
+expression.
+
+% \begin{center}
+% \drule[]{typ-sub}
+% \end{center}
+
+%\baber{discuss challenges of this approach, specially with functions.}
+
+
+\paragraph{Challenges with unambiguous relation.}
+Restricting multiple upcasts with unambiguous relation
+may assist to make the calculus deterministic but
+unambiguous relation itself is non-trivial in metatheory.
+Specifically, it becomes challenging with multiple
+type annotations with functions.
+For example, $[[\x.e:Int -> Int/\Bool : Int -> Int : Int -> Int\/Bool]]$
+is deterministic as long as we carry the middle type i.e $[[Int -> Int]]$.
+As soon as we drop the middle type, application of such lambdas may
+become non-deterministic.
+The contravariance of function input type adds further
+complexities.
+Possible remedies in such situations is to carry a list of
+type annotations with functions.
+
+% \paragraph{Carry only one type annotation with lambdas and drop type annotations.}
+
+% $[[\x.e:A->B]]$ instead if $[[\x.e:A1->B1:A2->B2]]$.
+% Problem occurs when type casting lambda with two
+% annotations.
+
+\subsubsection{Proposal 2: first-match semantics}
+
+A natural approach to select a particular branch of a switch
+expression is to follow the first-match semantics,
+meaning that first branch that matches the type
+of scrutinee will be selected.
+In this remedy we propose to keep disjointness in merges but
+eliminate disjointness from switches. Merges will be deterministic
+as in disjoint intersection types \cite{oliveira2016disjoint}.
+Whereas, the switches will follow the first-match semantics.
+% Meaning that instead of randomly falling into a branch, first matched branch
+% with the scrutinee will be chosen.
+% First match semantics is implemented in many practical
+% programming languages \cite{} \baber{citations}.
+
+\noindent For example, with this approach, first branch will be
+selected in the following code. This is because $[[1,,true]]$
+can be considered as a value of type $[[Int]]$ and the type
+of scrutinee i.e $[[Int/\Bool]]$ matches (is a subtype of) 
+$[[Int]]$.
+
+\begin{lstlisting}[language=Scala]
+  Bool isInt (x : Int | Bool) = switch (x)
+                                  (x:Int)  -> true
+                                  (y:Bool) -> false
+
+  isInt (1,,true)
+\end{lstlisting}
+
+\noindent However, first-match semantics selects first 
+branch in following code as well because of the same
+reason but with type $[[Bool]]$ in first branch.
+
+\begin{lstlisting}[language=Scala]
+  Bool isInt (x : Int | Bool) = switch (x)
+                                  (x:Bool)  -> false
+                                  (y:Int)   -> true
+
+  isInt (1,,true)
+\end{lstlisting}
+
+\noindent The semantics of the
+program may change by reordering the branches in this approach.
+The first code snippet returns $[[true]]$, whereas the second
+code snippet returns $[[false]]$.
+% $[[1,,true]]$
+% can be considered as value of type $[[Bool]]$, so as per first match
+% semantics it falls in the first branch i.e $[[Bool]]$ and returns
+% false. Whereas, $[[1,,true]]$ is also $[[Int]]$.
+
+% However, analyzing closely
+% the issue in our setting, non-determinism only occurs when a merge is
+% passed to the switch expression which may nullify the decisive power of
+% switch. By closely looking into the exambel above:
+
+% \begin{lstlisting}
+% 1,,True : Int & Bool : Int : Int | Bool
+
+% 1,,True : Int & Bool : Bool : Int | Bool
+% \end{lstlisting}
+
+% There are two paths to go from $[[Int /\ Bool]]$ to $[[Int \/ Bool]]$.
+% One path is via Int and other is via Bool.
+
+
+\subsubsection{Proposal 3: parallel application}
+Another proposal is to adopt the parallel application.
+In this approach, the code in all of the branches will be
+executed to which the type of scrutinee matches. Final result
+will be a merge of the values from all of the (match) branches.
+For example, the result of the following
+program will be $[[(false,,true)]]$.
+
+\begin{lstlisting}[language=Scala]
+  Bool isInt (x : Int | Bool) = switch (x)
+                                  (x:Bool)  -> false
+                                  (y:Int)   -> true
+
+  isInt (1,,true)
+\end{lstlisting}
+
+\paragraph*{Challenge with parallel application.}
+However, on of the challenges in naive implementation
+of this approach is that it may generate ill-typed programs
+as in the above example. The return value
+$[[(false,,true)]]$ is an ill-typed program
+in disjoint intersection types.
+This is because $[[(false,,true)]]$ is of type
+$[[Bool/\Bool]]$ and $[[Bool]]$ is not disjoint
+to $[[Bool]]$. If we allow type-checking such
+programs, the overall calculus will still be
+non-deterministic due to the ambiguous merge operator.
+We further propose two approaches to deal with such an issue.
+
+\paragraph{Disjoint return type of branches.}
+One approach to solve this problem is to employ disjointness
+in the return type of alternative branches.
+For example, the following problematic program will
+be rejected in this case:
+
+\begin{lstlisting}[language=Scala]
+  Bool isInt (x : Int | Bool) = switch (x)
+                                  (x:Bool)  -> false
+                                  (y:Int)   -> true
+
+  isInt (1,,true)
+\end{lstlisting}
+
+\noindent This is because both of the branches return values
+of type $[[Bool]]$ and $[[Bool]]$ is not disjoint
+to $[[Bool]]$. Whereas, the following program will
+be accepted:
+
+\begin{lstlisting}[language=Scala]
+  Int | Bool notSucc (x : Int | Bool) = switch (x)
+                                          (x:Bool)  -> not x
+                                          (y:Int)   -> succ x
+
+  notSucc (1,,True)
+\end{lstlisting}
+
+\noindent Note that the first branch returns $[[Bool]]$ and
+the second branch returns $[[Int]]$. Since $[[Int]]$
+is disjoint to $[[Bool]]$, therefore, it is safe to accept
+such programs.
+
+\paragraph{Record type for explicit disjointness.}
+The second approach is to use record types with distinct
+labels as a return type of alternative branches to enforce disjointness.
+The return type of a switch in this case will always be
+sound. Therefore, the calculus will not generate
+ill-typed programs at runtime.
+
+\begin{lstlisting}[language=Scala]
+  {l1:Bool, l2:Bool} isInt (x : Int | Bool) = switch (x)
+                                          (x:Int)  -> {l1:true}
+                                          (y:Bool) -> {l2:false}
+
+  isInt (1,,true)
+\end{lstlisting}
+
+% \subsection{Remedy 6: Only one type annotation with functions}
+
+% Yet another approach is to to have disjoint
+% return type of branches.
+
+
+\subsection{Multiple Interface Inheritance}
+
+Multiple interface inheritance is a prominent feature
+available in many modern programming languages including
+Java and Scala.
+This feature is essential for the extensibility and scalability
+of software development. The calculi discussed in this thesis
+do not support multiple interface inheritance.
+Another line of future work is to allow multiple
+interface inheritance in \name.
+
+Specifically, \name with nominal types can further
+be enriched to support multiple inheritance.
+The lack of multiple interface inheritance is primarily
+due to the fact that only the $[[Top]]$ type or a nominal
+type can be declared as a supertype of another nominal type
+in $[[PG]]$. For example, in a nominal type environment
+with $\Delta = \mathsf{Person} [[<:]] [[Top]],
+\mathsf{Robot} [[<:]] [[Top]]$, the following new
+declaration is allowed:
+
+\begin{center}
+$\Delta = \mathsf{Person} [[<:]] [[Top]],
+\mathsf{Robot} [[<:]] [[Top]],
+\mathcolorbox{lightgray}{\mathsf{Student} [[<:]] \mathsf{Person}}$
+\end{center}
+
+\noindent We add a new nominal type named
+\lstinline{Student} and extend it with \lstinline{Person}.
+Notice that only the $[[Top]]$ type or a nominal type
+is declared as a parent type in $[[PG]]$.
+An attempt to declare multiple parents of a nominal
+type is rejected. For example, the following extension
+of $[[PG]]$ is not allowed:
+
+\begin{center}
+$\Delta = \mathsf{Person} [[<:]] [[Top]],
+\mathsf{Robot} [[<:]] [[Top]],
+\mathcolorbox{lightgray}{\mathsf{Hybrid} [[<:]] \mathsf{Person}},
+\mathcolorbox{lightgray}{\mathsf{Hybrid} [[<:]] \mathsf{Robot}}$
+\end{center}
+
+This restricts multiple inheritance
+due to the fact that only one type can be
+declared as a parent type
+of another nominal type. It is essential for the
+multiple interface inheritance that a nominal type
+may define multiple parent types.
+Multiple inheritance can be achieved by allowing
+intersection types to be a supertype of nominal types
+in $[[PG]]$. Specifically, allowing intersections
+as parent types in $[[PG]]$ will allow the following
+declaration, which naturally provides multiple
+interface inheritance:
+
+\begin{center}
+$\Delta = \mathsf{Person} [[<:]] [[Top]],
+\mathsf{Robot} [[<:]] [[Top]],
+\mathcolorbox{lightgray}{\mathsf{Hybrid} [[<:]] \mathsf{Person}
+[[/\]]\mathsf{Robot}}$
+\end{center}
+
+
+
+
+\subsection{Explicit Disjointness of Nominal Types}
+The Ceylon language employs an \lstinline{of}
+construct to explicitly declare the disjointness
+of nominal types. We will elaborate this using the
+following Ceylon code:
+
+\begin{lstlisting}[language=Scala]
+  abstract class Student() of PG | UG {}
+  class PG() extends Student() {}
+  class UG() extends Student() {}
+\end{lstlisting}
+
+\noindent The first line of the code creates a \lstinline{Student}
+class and declares two subtypes of \lstinline{Student}, \lstinline{PG} 
+and \lstinline{UG} using the \lstinline{of} construct.
+This declarations marks \lstinline{PG} and \lstinline{UG} disjoint.
+It is safe to use \lstinline{PG} and \lstinline{UG} in alternative
+branches of a switch expressions. On the other hand, it is
+prohibited to create a class that extends both \lstinline{PG} and
+\lstinline{UG} to retain determinism. The class \lstinline{PG}
+and the class \lstinline{UG} must later be defined in the code.
+The formalization of such a construct is also an interesting line of
+future work. In essence, the nominal type environment will be
+revised to handle the \lstinline{of} construct. Each entry
+in the revised $[[PG]]$ contain three components. The name of the
+newly defined nominal type, its parent type(s), and its subtype(s).
+
+\begin{center}
+$\Delta = \mathsf{Student} [[<:]] [[Top]] ~ \mathcolorbox{lightgray}{* ~ \mathsf{[PG,UG]}},
+\mathsf{PG} [[<:]] \mathsf{Student} ~ \mathcolorbox{lightgray}{* ~ \mathsf{[~]}},
+\mathsf{UG} [[<:]] \mathsf{Student} ~ \mathcolorbox{lightgray}{* ~ \mathsf{[~]}}$
+\end{center}
+
+\subsection{Gradual Typing}
+
+Gradual typing is another line of
+interest in practical programming
+languages with significant recent development.
+Union types naturally provide
+gradual typing in a restricted fashion
+in such a way that actual type is among
+the certain candidates from a union of types.
+In gradual typing, on the other hand, no
+information of the unknown type is statically available.
+Inclusion of gradual typing with \name is another
+line of future work with practical interest.
+The naive addition of
+gradual typing with disjoint switches may allow the following program
+(where * denotes unknown type):
+
+\begin{lstlisting}
+    Bool isInteger (x : Int | *) {
+    switch (x):
+        Int  -> true
+        *    -> false
+    }
+\end{lstlisting}
+
+The type-based switch construct in this code snippet is exhaustive, but
+how do we make sure that the two branches will not overlap?
+This question gives birth to a particular research question
+of redefining the disjointness in the presence of union types,
+type-based switches, and the unknown type (*).
+The unknown type makes the disjointness non-trivial because
+of the unavailability of the static type information.
+
+% Specifically, studying gradual typing with
+% the disjointness proposed in \name is
+% non-trivial. To make the matter worst,
+% disjoint polymorphism adds new challenges
+% with gradual typing.

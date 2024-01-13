@@ -1,0 +1,1045 @@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Introduction}
+\label{chap:intro}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\baber{Programming languages in general.}
+Programming languages are the first mode of communication between
+humans and computers. As the name indicates, programming 
+languages are primarily used to program computers and 
+machines in general. The robustness of a program largely depends
+upon the programming language used to build that program.
+Programming languages have evolved over the decades. Researches are
+working in various areas in the programming languages including 
+security, parallel computing, domain specific languages,
+compilers and quantum computing among others. 
+
+%\baber{More about the type system in general.}
+Type systems \citep{cardelli1996type,pierce2002types} is one such area
+in the study of programming languages.
+Type systems received significant attention in programming languages
+since they were first introduced.
+% Programming languages can 
+% roughly be categorized into typed and untyped
+% languages considering the type system. C, C++, Java and 
+% Scala are some of the examples of typed programming languages.
+% Whereas, JavaScript, Python and most scripting languages are 
+% classified as untyped programming languages. Our focus will 
+% mainly revolve around typed programming languages in this thesis.
+% Typed languages can further be categorized into statically and
+% dynamically typed languages. Statically typed languages perform 
+% the type-checking at compile time. Whereas, dynamically typed 
+% languages may perform type-checking at runtime.
+Programming languages can 
+roughly be categorized into statically typed and
+dynamically typed languages considering the type system.
+C++ \citep{stroustrup1986overview}, Java \citep{gosling2000java}
+and Scala \citep{odersky2004overview} are some of the examples of
+statically typed programming languages.
+Whereas, JavaScript \citep{crockford2008javascript},
+Python \citep{van1995python} and most scripting
+languages are classified as dynamically typed programming
+languages. Our focus will mainly revolve around
+statically typed programming languages in this thesis.
+Statically typed languages perform 
+type-checking at compile time. Whereas, dynamically typed 
+languages may perform type-checking at runtime.
+
+Nevertheless, \emph{types} play an essential role both in 
+statically and dynamically typed languages.
+Types provide a robust mechanism to introduce 
+and eliminate program expressions by classifying 
+the expressions in various categories or sets.
+A sound type system ensures that a well-typed
+expression is used in the program where expected.
+In statically typed languages, the type system 
+raises an error at compile time 
+if the expressions are ill-typed.
+The following program illustrates the use of
+types in a program:
+
+\begin{lstlisting}[language=Scala]
+  Int add (x : Int, y : Int) {
+    return x + y
+  }
+
+  result = add (1, 2)   //accepted
+\end{lstlisting}
+
+
+\noindent The above program will run fine because 
+\lstinline{add} is 
+expecting two integers. The arguments 1 and 2 being 
+passed to the \lstinline{add} function are integers.
+Whereas, the following
+call to \lstinline{add} will be rejected at compile time:
+
+\begin{lstlisting}[language=Scala]
+  add (1, "Hello")    //rejected
+\end{lstlisting}
+
+\noindent The problem here is that we cannot and should not be adding an
+integer and a string together. In this case, type system statically
+detects that \lstinline{"Hello"} is not an integer and restrains from the
+compilation. If not detected before compilation, such errors may
+cause the program to terminate abnormally during execution.
+On the other hand, in an untyped programming language, following error may go undetected
+during compilation:
+
+\begin{lstlisting}[language=Scala]
+  add (x, y) {
+    return x + y
+  }
+
+  add (1, "Hello")   //undetected error
+\end{lstlisting}
+
+\noindent Notice that no types are involved in this program. There is no
+static guarantee that either we are adding two integers, strings or
+booleans. Such a program may crash at runtime.
+
+%\baber{Shall we talk about type inference here?}
+
+Type systems further categorize programs into
+well-typed and ill-typed programs. Ill-typed programs 
+may contain a runtime error thus rejected at compile time.
+Whereas, well-typed programs do not go wrong because of
+typing errors.
+%\baber{They may go wrong but do not carry a type error.}
+Thus \emph{type system guarantees the absence of certain 
+runtime behaviors where program may go wrong}.
+Types also provide a form of program documentation.
+For example, by looking at the return type of a 
+function one can learn what should be
+expected from the function.
+
+%\baber{Study of type systems is hard.}
+While type systems come with benefits, the study of 
+type systems is hard.
+% It is less troublesome to 
+% add a new feature in a programming language without sound
+% theoretical study. On the contrary, 
+Adding a new 
+feature with sound theoretical standings is non-trivial.
+Normally, the theoretical complexity of the type system 
+increases with the number of features and how 
+various features interact.
+Interacting features are hard to deal with compared 
+to the orthogonal features. The type system becomes
+sophisticated with more advance features resulting in
+significant increase of complexity in the metatheory.
+Intersection and union types
+\citep{barbanera1995intersection,dunfield2014elaborating,muehlboeck2018empowering,pierce2002programming} 
+are such sophisticated advance features which can 
+significantly increase the theoretical 
+complexity of a sound type system.
+
+% For example, integer type provides an interface to introduce
+% expressions of integer type. Having introduced an expression of integer type, programmer
+% may later use it in addition and subtration operations etc. This is the interface to use
+% or eliminate integer expressions. Now, let's think about intersection types and union types.
+% So called merge operator is a construct used to introduce intersection types.
+% Unrestricted merge operator may be a source of coherence problem. Disjoint intersection types
+% solve coherence problem with the merge operator.
+% Union types are eliminated using type-based switch construct. The semantics of the program
+% may be ambigous if multiple branches of a switch construct overlap with scrutinee.
+% This ambiguity leads to non-determinism, whereas determinism is a crucial property in practice.
+
+Intersection types allow
+to construct a term of multiple (maybe) 
+non-overlapping types. Union types 
+allow a term to have alternative types.
+Many modern programming languages support intersection 
+and union types, such as Scala \citep{scala3doc}
+and Ceylon \citep{king2013ceylon}.
+This illustrates the 
+significance of these features in today's 
+programming universe. The intersection and 
+union types are useful to encode various
+programming constructs such as function overloading 
+\citep{castagna1995calculus, cardelli1985understanding, wadler1989make}
+and multiple inheritance \citep{compagnoni1996higher}.
+The following Scala
+code demonstrates the use of intersection
+and union types in practice:
+
+\begin{lstlisting}[language=Scala]
+  trait Person () {}
+  trait Robot  () {}
+
+  //illustrating intersection types
+  class Hybrid () extends Person with Robot {}
+
+  //illustrating union types
+  def speak(x: Person | Robot): String = {
+    x match
+      case p: Person => "I am person"
+      case r: Robot  => "I am robot"
+  }
+\end{lstlisting}
+
+\noindent The first two lines of the code declare two traits i.e.
+\lstinline{Person} and \lstinline{Robot}. We then create
+a class named \lstinline{Hybrid}. Note that the class 
+\lstinline{Hybrid} extends two traits, the
+\lstinline{Person} and \lstinline{Robot} using the
+keyword \lstinline{with} . In Scala,
+the keyword \lstinline{with} uses intersection types
+for multiple interface inheritance.
+Next, we define a function \lstinline{speak}. It takes
+an input of type \lstinline{Person} or \lstinline{Robot} 
+(\lstinline{Person | Robot}).
+The function \lstinline{speak} then
+returns different value depending upon the
+specific type of parameter \lstinline{x}.
+Such a type-based case analysis on an expression of
+union of types is analogous to function overloading
+\citep{castagna1995calculus, cardelli1985understanding, wadler1989make}.
+Similar to function overloading, the type-based
+case analysis provides the flexibility of
+executing disparate code depending on the
+dynamic (specific) type of the expression.
+Another Scala example\footnote{\url{https://medium.com/@Methrat0n/intersection-type-in-scala-5320dedf5cf}.}
+illustrating the usability of intersection and
+union types is:
+
+\begin{lstlisting}[language=Scala]
+  trait Fish {
+    def swim(): Unit = {}
+  }
+
+  trait Bird {
+    def fly(): Unit = {}
+  }
+
+  //illustrating intersection types
+  class FlyingFish() extends Fish with Bird {
+    override def swim(): Unit = {}
+    override def fly(): Unit = {}
+  }
+
+  var flyingFish: Fish & Bird = FlyingFish()
+  flyingFish.fly()  //safe
+  flyingFish.swim() //safe
+
+  //illustrating union types
+  def move(FishOrBird: Fish | Bird): Unit =
+    FishOrBird match
+      case fish: Fish => fish.swim()
+      case bird: Bird => bird.fly()
+\end{lstlisting}
+
+Although, intersection and union types can encode
+such powerful and advance programming features.
+The interaction of 
+intersection and union types is known to be non-trivial
+in theory. For example, the challenges involved in the
+subtyping distributivity of intersection
+and union types \citep{barendregt1983filter}.
+\cite{huang2021distributing} elegantly explain such challenges.
+This thesis examines the interaction of 
+intersection and union types in various 
+theoretical and practical settings. 
+It consists of two main technical parts:
+
+\begin{enumerate}
+  \item { 
+          % Type-soundness is a crucial property of the type system.
+          In part 1 (\Cref{chap:switch,chap:disjointness,chap:merge}), 
+          we discuss the constructs to introduce 
+          and eliminate intersection types
+          and union types respectively in a type-safe manner.
+          Specifically, we start with a type-based switch 
+          expression for union elimination based upon the 
+          disjointness called \name calculus.
+          \name is designed to keep the branches of a switch 
+          expression disjoint.
+          Disjointness prevents a value to fall in multiple 
+          branches and ensures the determinism of the calculus.
+          This work is dual to disjoint intersection types
+          \citep{oliveira2016disjoint} in its simplified form.
+          We then extend \name with advanced features including 
+          intersection types, nominal types, subtyping 
+          distributivity and disjoint polymorphism.
+          Moreover, we study \name with the merge operator
+          which results in loss of
+          determinism still retaining type soundness.
+
+          % In part 1, we then discuss a 
+          % We later extend disjoint switches with merge operator.
+          % The expressiveness of a calculus with switch expression and merge operator
+          % is significantly greater than disjoint switches. We prove that this
+          % extension is type safe. But this extension determinism. We discuss this in
+          % detail in Section~\ref{} along with a few remidies for non-determinism.
+  }
+
+  \item{Part 2 (\Cref{chap:duo}) consists of a study of subtyping 
+        relation which exploits the duality of 
+        intersection and union types. We show 
+        that the theoretical complexity of subtyping
+        decreases by exploiting the duality of 
+        intersection types and union types.
+        We also explore extra features that come 
+        for free with the duality.
+      }
+\end{enumerate}
+
+% First part of this thesis examines a type-sound and deterministic type-based switch
+% expression. Determinism is enforced with the novel notion of disjointness. Disjointness
+% restricts having overlapping branches. As a result, scrutinee can fall at most in one
+% branch.
+
+%---------------------------------------------------------------------------%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Introduction for Disjoint Switches
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\section{Union types and disjoint switch expressions}
+
+% \section{Introduction}
+% \label{sec:intro}
+
+Most programming languages support some mechanism to express terms
+with alternative types. Algol 68~\citep{van1969report,van2012revised} included a form of
+\emph{tagged} unions for this purpose. With tagged unions
+an explicit tag distinguishes between different cases in the
+union type.
+Such an approach has been adopted by functional languages, like Haskell, ML, or
+Ocaml, which allow tagged unions (or sum types~\citep{pierce2002types}), typically via
+either \emph{algebraic datatypes}~\citep{hope} or \emph{variant types}~\citep{garrigue98}.
+Languages like C or C++ support \emph{untagged} union types where
+values of the alternative types are simply stored at the same memory
+location. However, there is no checking of types when accessing values of
+such untagged types. It is up to the programmer to ensure that the proper
+values are accessed correctly in different contexts; otherwise the
+program may produce errors by accessing the value at the incorrect type.
+
+Modern OOP languages, such as Scala 3~\citep{scala3doc}, Flow~\citep{chaudhuri2015flow},
+TypeScript~\citep{bierman2014understanding}, and Ceylon~\citep{king2013ceylon}, support a form
+of untagged union types.
+In such languages a union type $[[A \/ B]]$ denotes expressions which can have type
+$[[A]]$ or type $[[B]]$. Union types have grown to be quite popular in some
+of these languages. A simple Google search on questions regarding union types
+on StackOverflow returns around 6620 results
+(at the time of writing),
+many of which arising from TypeScript programmers.
+Union types can be useful in many situations.
+For instance, union types provide an alternative to some forms
+of overloading and they enable an approach to \emph{nullable types} 
+(or explicit nulls)~\citep{gunnerson2012nullable,nieto20nulls}.
+\begin{comment}
+For instance, union types provide an alternative to some forms
+of overloading. The idea is that a function that takes an argument
+with a union type acts similarly to an overloaded function.
+Furthermore, union types have other uses, such as modelling error handling,
+or allowing an approach to \emph{nullable types} (or explicit nulls)~\cite{gunnerson2012nullable,nieto20nulls}.
+Languages like Ceylon or Scala 3, for example, support nullable types via
+union types. In such languages, the \lstinline{null} reference
+can only be assigned to values that have type \lstinline{Null} (or some supertype).
+To declare a variable of type \lstinline{String}
+that can be \lstinline{null} the variable must have the union type
+%\lstinline{String} $\vee$ \lstinline{Null}
+\lstinline{$[[String\/Null]]$}
+%$[[String \/ Null]]$
+(which is a supertype of \lstinline{Null}).
+This allows programmers to control which variables can have \lstinline{null} references or
+not, giving more static assurances, while helping to prevent various bugs
+involving \lstinline{null} pointers.
+\end{comment}
+
+\paragraph{Elimination construct for union types.}
+To safely access values with union types, some form of
+\emph{elimination construct} is needed. Many programming languages often
+employ a language construct that checks
+the types of the values at runtime for this purpose.
+Several elimination constructs for (untagged) union types
+have also been studied in the research literature~
+\citep{benzaken2003cduce,dunfield2014elaborating,castagna:settheoretic}.
+Typically, such constructs take the form of a type-based case analysis
+expression. An example of the elimination construct for
+union types in Scala is shown next:
+
+\begin{lstlisting}[language=Scala]
+  var str: String | Null = null
+
+  str match
+    case s: String => s.length
+    case n: Null   => -1
+\end{lstlisting}
+
+The code starts by declaring a variable \lstinline{str}
+of type \lstinline{String | Null}. It then does a type-based
+case analysis on \lstinline{str} to safely access the
+\lstinline{length} function. Without such a type-based case
+analysis, a call to length function (\lstinline{s.length})
+may result in a runtime error because the length function
+is not defined on \lstinline{null} values.
+This code uses a recently proposed explicit nulls 
+\citep{nieto20nulls} feature
+of the Scala programming language. The core of this feature
+lies in revising the subtyping hierarchy of Scala.
+Interested reader may refer to the original publication for details.
+When enabled, explicit nulls allow to explicitly mark
+the nullable values. For example, \lstinline{str} in this example
+stores a \lstinline{null} value, therefore, it must be having
+the type \lstinline{Null} explicitly.
+In other words, the following program will be rejected
+which stores a \lstinline{null} value but does not explicitly
+marks it nullable with the static type of \lstinline{str}.
+
+\begin{lstlisting}[language=Scala]
+  var str: String = null //rejected
+\end{lstlisting}
+
+\paragraph{Complication with subtyping.}
+A complication is that the presence of subtyping introduces the
+possibility of \emph{overlapping types}. For instance, we may have a
+\lstinline{Student} and a \lstinline{Person}, where every student is a person (but not
+vice-versa). If we try to eliminate a union using such types we can
+run into situations where the type in one branch can cover a type in a
+different branch (for instance \lstinline{Person} can cover
+\lstinline{Student}). More generally, types can \emph{partially overlap}
+and for some values two branches with such types can apply, whereas
+for some other values only one branch applies.
+Therefore, the design of such elimination constructs has to
+consider what to do in situations where overlapping types arise.  A
+first possibility is to have a \emph{non-deterministic semantics},
+where any of the branches that matches can be taken. However, in
+practice determinism is a desirable property,
+so this option is not practical. A second possibility, which is
+commonly used for overloading, is to employ a \emph{best-match
+  semantics}, where we attempt to find the case with the type that
+best matches the value. Yet another option is to use a
+\emph{first-match semantics}, which employs the order of the branches
+in the case. Various existing elimination constructs for unions
+~\citep{benzaken2003cduce,castagna:settheoretic}
+employ a first-match approach. All of these three options have been explored
+and studied in the literature.
+
+\paragraph{They Ceylon programming language.}
+The Ceylon language~\citep{king2013ceylon} is a JVM-based language that aims to provide an
+alternative to Java. The type system is interesting
+in that it departs from existing language designs, in particular
+with respect to union types and method overloading.
+The Ceylon designers had a few different
+reasons for this. They wanted to have a fairly rich type system
+supporting, among others: \emph{subtyping}; \emph{generics with bounded
+quantification}; \emph{union and intersection types}; and \emph{type-inference}.
+The aim was to support most features available
+in Java, as well as a few new ones. However the Ceylon designers wanted to do this in
+a principled way, where all the features interacted nicely.  A
+stumbling block towards this goal was Java-style method
+%overloading\footnote{\url{https://github.com/ceylon/ceylon-spec/issues/73}}.
+overloading~\citep{ceylonoverloading}.
+The interaction of overloading with other
+features was found to be challenging. Additionally,
+overloaded methods with overlapping types
+make reasoning about the code hard
+for both tools and humans. Algorithms for finding the best match for an
+overloaded method in the presence of rich type system features (such as
+those in Ceylon) are challenging, and not necessarily well-studied in the
+existing literature. Moreover allowing overlapping methods can make
+the code harder to reason for humans: without a clear knowledge of how
+overloading resolution works, programmers may incorrectly assume that
+a different overloaded method is invoked. Or worse, overloading can
+happen silently, by simply reusing the same name for a new
+method. These problems can lead to subtle bugs.
+For these reasons, the Ceylon designers decided not to support
+Java-style method overloading.
+
+To counter the absence of overloading, the Ceylon designers turned to
+union types instead, but in a way that differs from
+existing approaches. Ceylon includes a type-based
+\emph{switch construct} where all the cases must be \emph{disjoint}.  If
+two types are found to be overlapping, then the program is statically
+rejected. For example, the following program will statically be
+rejected in Ceylon (where Student is a subtype of Person):
+
+\begin{lstlisting}
+// Student <: Person, PG <: Student
+  Student | Person human = PG();
+
+  switch (human)
+      case (is Person)  {}
+      case (is Student) {}
+\end{lstlisting}
+
+\noindent Whereas, the following program is accepted:
+
+\begin{lstlisting}
+  Person | Robot hybrid = Robot();
+
+  switch (hybrid)
+      case (is Person)  {}
+      case (is Robot)   {}
+\end{lstlisting}
+
+Many common cases of method overloading, which are clearly
+not ambiguous, can be modelled using union types and disjoint switches.
+By using an approach based on disjointness, some use cases for
+overloading that involve Java-style overloading with
+overlapping types are forbidden. However,
+programmers can still resort to creating non-overloaded methods in
+such a case, which arguably results in code easier to reason about.
+Disjointness ensures that it is always
+clear which implementation is selected for an ``overloaded'' method,
+and only in such cases overloading is allowed\footnote{Ceylon
+  does allow dynamic type tests, which
+  in combination with switches can simulate some overlapping.}.
+In the switch construct,
+the order of the cases does not matter and reordering the cases has no
+impact on the semantics, which can also aid program understanding and
+refactoring.
+%Additionally, union types have other applications besides overloading,
+%so we can get other interesting functionality as well.
+Finally, from the language design point of view, it would be strange to support two
+mechanisms (method overloading and union types), which greatly overlap
+in terms of functionality.
+
+\paragraph{Theoretical study of disjoint switches.}
+While implemented in the Ceylon language,
+disjoint switches have not been studied formally.
+To our knowledge, the work by \citet{muehlboeck2018empowering} is the only work
+where Ceylon's switch construct
+and disjointness are mentioned. However, their focus
+is on algorithmic formulations of distributive subtyping
+with unions and intersection types. No semantics of the switch construct is given.
+Disjointness is informally defined in various sentences in the
+Ceylon documentation. It involves a set of 14 rules described in
+%English\footnote{\url{http://web.mit.edu/ceylon_v1.3.3/ceylon-1.3.3/doc/en/spec/html_single}}.
+English \citep{ceylondisjointness}.
+Some of the rules are relatively generic, while
+others are quite language specific.
+Interestingly, a notion
+of disjointness has already been studied in the literature
+for intersection types~\citep{oliveira2016disjoint}. That line of work studies calculi
+with intersection types and a \textit{merge operator}~\citep{reynolds1988preliminary}. Disjointness
+is used to prevent ambiguity in merges, which can create
+values with types such as \lstinline{$[[Int /\ Bool]]$}. Only values
+with disjoint types can be used in a merge.
+
+\begin{comment}
+In summary, the contributions of this paper are:
+
+\begin{itemize}
+\item {\textbf{The calculus}:} We present a simple calculus with union
+  types, nullable types and a disjoint switch construct. We then present a richer extension of \name with intersection types,
+  distributive subtyping and nominal types. In addition, in the extended version of the paper, we
+  study extensions with parametric polymorphism and a subtyping rule to detect empty types.
+  All calculi and extensions are type sound and deterministic.
+\item {\textbf{Sound, complete and decidable formulations of disjointness and subtyping:}}
+  We present two formulations of disjointness, which are general and
+  language independent. The second formulation
+  is novel and more general, and can be used in a calculus that includes
+  intersection types as well. We also extend a previous subtyping relation~\cite{huang2021distributing} to
+  include nominal types. For both disjointness and subtyping we show that the specifications
+  are sound, complete and decidable and present the corresponding algorithmic formulations.
+
+% \item {\bf Extensions:} We study two other extensions of \name:
+%   parametric polymorphism and subtyping rule for a class of types
+%   that represent empty types. We also prove type soundness and determinism
+%   for those two extensions.
+
+\item {\textbf{Mechanical formalization:}}
+  The results about \name and its
+  extensions have been formalized in the Coq theorem prover and can be found in
+  the supplementary materials, together with an extended version of the paper.
+\end{itemize}
+\end{comment}
+
+
+%---------------------------------------------------------------------------%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Introduction for Intersection Types and Merge Operator
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% \section{Intersection Types and Merge Operator}
+
+% Intersection types, written as $[[A /\ B]]$ or $[[A]]$ \& $[[B]]$,
+% correspond to conjuction and product types in logic and category
+% theory respectively.
+% Many modern programming languages such as Scala \citep{scala3doc},
+% TypeScript \citep{bierman2014understanding} and 
+% Ceylon \citep{king2013ceylon} support intersection types.
+% In programming languages, 
+% intersection types have mainly been studied in the context of 
+% refinement types \cite{}, function overloading, \cite{} and 
+% multiple inheritence \cite{}.
+
+% \paragraph{Refinetement intersections.}
+% Refinement intersections assign more refined
+% types to certain expressions.
+% It increases expressiveness of types.
+% For example:
+
+% \begin{lstlisting}
+% 1 : Int
+% 1 : Pos
+% 1 : Int&Pos
+% \end{lstlisting}
+
+% \noindent Since 1 is both natural number and positive, it can be assigned
+% an intersection type Nat\&Pos.
+% Refinements intersections are more useful with polymorphism.
+% Type $[[a/\Int]]$ ($[[a]]$ is a type variable)
+% refines $[[a]]$ to be a subtype of $[[Int]]$.
+% If instantiation of $[[a]]$ does not overlap
+% with $[[Int]]$, then $[[a/\Int]]$ would be an
+% empty type, meaning that no term would have
+% type $[[a/\Int]]$.
+
+% \paragraph{Multiple inheritance.}
+% Intersection types naturally provide an interface 
+% for multiple inheritence. Scala and Ceylon
+% use intersection types for multiple interface inheritance.
+% A concrete Scala code
+% example for multiple interface inheritance is:
+
+% % \begin{lstlisting}
+% % class A {}
+% % class B {}
+% % class C extends A&B {}
+% % \end{lstlisting}
+
+% % \noindent Class C extends an intersection of A and B, which means it
+% % inherits all the properties from class A and class B. 
+
+% \begin{lstlisting}
+% interface Student {}
+% interface Worker {}
+% interface StudentWorker extends Student with Worker {}
+% \end{lstlisting}
+
+% \noindent StudentWorker constitutes the objects which are both student
+% and worker at the same time. Thus it inherits attributes both of
+% interface Student and interface Worker enabling multiple interface
+% inheritance using intersection types.
+
+% \paragraph{Merge operator.}
+% While refinement intersections increase expressiveness of types,
+% an introduction form of intersection types, the so called
+% merge operator, increases the expresiveness of terms.
+% Intersection types alongwith its introduction form can encode
+% useful programming constructs such as function overloading,
+% multi field recods from single field recods etc.
+% In a calculus with merge operator and intersection 
+% types, one can
+% write the following program:
+
+% \begin{center}
+%   $[[1,,true : Int/\Bool]]$
+% \end{center}
+
+% \noindent Expression $[[1,,true]]$ is a so called merge operator.
+% Dunfield illustrates the significance of merge operator.
+% Merge operator can encode function overloading:
+% % \paragraph{Function overloading.}
+% % It also helps with function overloading:
+
+% \begin{center}
+%   $[[(succ ,, neg) 1]]$
+% \end{center}
+
+% \noindent Applying a merge of function succ and 
+% not to 1 yields 2. A naive implementation of 
+% merge operator may lead non-determinism.
+% For example:
+
+% \begin{center}
+%   $[[succ (1,,2)]]$
+% \end{center}
+
+% \noindent If we pass a merge 1 and 2 to succ function, it may yield to
+% 2 or 3 depending upon which part of the merge is selected for
+% function application. Disjoint intersection types \citep{oliveira2016disjoint}
+% provide a solution to coherence problem by restricting the intersection
+% of overlapping types. Only a merge of disjoint types is
+% allowed in disjoing intersection types.
+% For example, $[[1,,true]]$ is allowed because $[[Int]]$
+% is disjoint to $[[Bool]]$. Whereas, $[[1,,2]]$ is not
+% allowed because $[[Int]]$ is not disjoint to $[[Int]]$.
+
+
+%---------------------------------------------------------------------------%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Introduction for DuoTyping
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\section{Duality of subtyping}
+\label{sec:intro:duo}
+% Duality is an important concept in logic. This work examines the duality of intersection types
+% and union types.
+
+% \section{Introduction}
+% \label{sec:introduction}
+
+Subtyping is a concept frequently encountered in many programming
+languages and calculi. It is also a pervasive and fundamental
+feature in Object-Oriented Programming (OOP). Various forms of
+subtyping exist for different type system features, including
+\emph{intersection types}~\citep{barbanera1995intersection}, 
+\emph{union types}~\citep{barbanera1995intersection} or 
+\emph{bounded quantification}~\citep{canning1989f}. 
+Modern OOP languages such as Scala~\citep{odersky2004overview},
+Ceylon~\citep{king2013ceylon}, Flow~\citep{chaudhuri2015flow} or 
+TypeScript~\citep{bierman2014understanding} all support the 
+aforementioned type system features. 
+
+As programming languages evolve, new features are added.
+This requires that subtyping for these new features is
+developed and also integrated with existing features. However, the
+design and implementation of subtyping for new features is quite often
+non-trivial. There are several, well-documented
+issues in the literature. These include finding algorithmic forms for
+subtyping (for instance doing transitivity elimination)
+\citep{steffen1994higher} or
+proving metatheoretical properties such as transitivity or
+narrowing~\citep{abel2008syntactic}. Such issues occur, 
+for instance, in some of the 
+latest developments for OOP languages, such as the DOT
+calculi (which model the essence of Scala)~\citep{amin2012dependent}.
+One possible way to reduce the non-trivial amount of work needed to develop
+new features, would be if two related features could be develop at once
+with a coherent design. This thesis explores a new methodology that
+enables such benefits.
+
+Normally programming language features are designed independently of each
+other. However there are features that are closely
+related to each other, and can be viewed as \emph{dual features}.
+Various programming language features are known to be dual 
+in programming language theory. 
+For instance sum and product types are well-known 
+to be duals~\citep{BirddeMoor96:Algebra}.
+Similarly universal and existential quantification are dual concepts
+as well~\citep{barwise1981generalized}. 
+Moreover duality is a key concept in category theory~\citep{MacLane:cwm} and 
+many abstractions widely used in functional programming (such as Monads and
+CoMonads~\citep{uustalu2008comonadic}) are also known to be duals.
+
+In OOP type systems dual features are also common. 
+For instance all OOP languages contain a \emph{top type} (called \verb|Object| in
+Java or \verb|Any| in Scala), which is the supertype of all types. 
+Many OOP languages also contain a \emph{bottom type}, which is a subtype of
+all types. Top and bottom types can be viewed as dual features, 
+mirroring the functionality of each other. 
+\emph{Intersection} and \emph{union}
+types are another example of dual features. The intersection of two
+types \verb|A| and \verb|B| can be used to type a value that
+implements \emph{both} \verb|A| \emph{and} \verb|B|. The union of two types 
+\verb|A| and \verb|B| can be used to type a value that
+implements \emph{either} \verb|A| \emph{or} \verb|B|.
+  
+Duality in OOP and subtyping is often only informally observed by humans. For instance,
+by simply understanding the behaviour of the features and observing their
+complementary roles, as we just did in the previous paragraph.
+At best duality is more precisely observed by
+looking at the rules for the language constructs and their duals and
+observing a certain symmetry between those rules. However existing formalisms
+and language designs for type systems and subtyping relations
+do not directly incorporate duality. Unfortunately
+this means that an opportunity to exploit obvious similarities
+between features is lost. 
+
+This thesis proposes a novel methodology for designing subtyping
+relations that exploits duality between features directly in the formalism.
+At the core of our
+methodology is a generalization of subtyping relations, which we call
+\emph{\nameduo}.  \nameduo is parameterized by the mode of the
+relation. One of these modes is the usual subtyping, while another
+mode is supertyping (the dual of subtyping). Using the mode it is possible
+to generalize the usual rules of subtyping to account not only for the
+intended behaviour of one particular language construct, but also of its
+dual. This means that the behaviour of the language construct and its dual
+is modelled by a single, common set of rules. In turn this ensures that
+the behaviour of the two features is modelled consistently. Moreover
+it also enables various theorems/properties of subtyping to be
+generalized to account for the dual features. Therefore, \nameduo offers
+similar benefits to the how duality is exploited in category theory.
+More concretely, \nameduo brings multiple benefits for the design
+of subtyping relations, which are discussed next.
+
+\paragraph{Shorter specifications.}
+When duality is exploited in specifications of subtyping it
+leads to shorter specifications because rules for dual features
+are shared. This also ensures a consistent design of the rules
+between the dual features directly in the formalism. Such consistency is
+not enforceable in traditional formulations of subtyping where the
+rules are designed separately, and thus their design is completely
+unconstrained with respect to the dual feature. A concrete example that illustrates
+shorter specifications is a traditional subtyping relation with top, bottom, union and intersection types,
+which would normally have 8 subtyping rules for those constructs. In a design with
+\nameduo we only need 5 subtyping rules. Basically we need only \emph{half of the rules}
+(4 in this case) to model the feature-specific rules, plus an additional
+\emph{duality rule} which is generic (and plays a similar role to \emph{reflexivity} and
+\emph{transitivity}).
+
+\paragraph{``Buy'' one feature get one feature for free!} Duality can lead to the
+discovery of new features. While top and bottom types, or intersection and union
+types are well-known in the literature (and understood to be duals),
+other features in languages with subtyping do
+not have a known dual feature in the literature. This is partly because, 
+when a language designer employs traditional formulations of subtyping, he/she
+is often only interested in the design of a feature (but not necessarily of its
+dual). Even for the case of union and intersection types, intersection types were developed
+first and the development of union types occurred years later. 
+Because the dual feature is often also useful, the traditional way to design subtyping rules
+represents a loss of opportunity to get another language feature essentially for free.
+%In some cases dual features have not yet been well explored.
+
+One well-known example of a language feature that has been widely exploited in
+the literature, but its dual feature has received much less attention
+is \emph{bounded quantification}~\citep{cardelli1985understanding}.
+Bounded quantification allows type variables to be defined with \emph{upper bounds}.
+However \emph{lower bounds} are also useful. One can think of universal quantification
+with lower bounds as a dual to universal quantification with upper bounds.
+The essence of (upper) bounded quantification is captured by the well-known
+$F_{<:}$ calculus~\citep{cardelli1985understanding}.
+However, as far as we know, there is no design
+that extends $F_{<:}$ with lower
+bounded quantification in the literature.
+Applying a \nameduo design to $F_{<:}$ gives
+us, naturally, the two features at once (lower and upper bounded quantification), as illustrated
+in our Section~\ref{sec:system-dkfs}.
+Such generalization of bounded quantification is related to
+the recent form of universal quantification with type bounds employed in Scala
+and the DOT family of calculi~\citep{amin2012dependent}. However, while Scala's type bounds are more
+expressive than what we propose, they are also much more complex and are in fact one of
+the key complications in the type systems of languages like Scala.
+Most DOT calculi require a built-in transitivity rule in subtyping
+because it is not known how to eliminate transitivity. In contrast, the
+generalization of $F_{<:}$ proposed by us has a formulation
+of subtyping where transitivity can be
+proved as a separate lemma.
+
+\paragraph{New proof techniques.} Designs of subtyping with duality
+also enable new proof techniques that exploit such duality. For instance
+there are various theorems that can be stated for both a feature and its
+dual, instead of having separate theorems for both. Some of the properties
+of union and intersection types are examples of this. Moreover, \nameduo
+also enables new proof techniques to prove traditionally hard theorems such as
+transitivity. Surprisingly to us, for the vast majority of the calculi that
+we have applied \nameduo to, transitivity proofs have been considerably simpler
+than their corresponding traditional formulations due to the use of \nameduo! 
+
+\paragraph{Shorter implementations.} Finally \nameduo also enables for shorter implementations.
+The benefits of shorter implementations are similar and follow from the benefits of shorter specifications.
+However there is a complicating factor when moving from a \emph{relational
+specification} into an implementation: the \emph{duality rule} is non-algorithmic.
+This is akin to what happens with transitivity, which is often also used
+in declarative formulations of subtyping. Eliminating transitivity to obtain
+an algorithmic system can often be a non-trivial challenge (as illustrated, for instance,
+by the DOT family of calculi~\citep{amin2012dependent}). However, we show that there is a simple and
+generally applicable technique that can be used to move from a declarative formulation
+of \nameduo into an algorithmic version. This contrasts with transitivity,
+for which there is not a generally applicable transitivity elimination technique.
+
+\begin{comment}
+
+In summary, the contributions of this paper are:
+\begin{itemize}
+\item {\textbf{\nameduo}:} A new methodology for the design of subtyping relations
+  exploiting duality.
+
+\item {\textbf{A case study on \nameduo}:}
+  A comprehensive study of various existing type systems and features,
+  which were redesigned to employ the \nameduo methodology. Our results
+  show that in most systems the size of the metatheory without duality and
+  with duality is comparable, while often transitivity proofs become
+  simpler when employing duality.
+
+\item {\textbf{$F_{<:}$ with lower bounded quantification}:} We propose a new generalization of System $F_{<:}$, called $F_{k\diamond}$,
+  which allows not only type variables to be quantified with upper bounds
+  and lower bounds as well. While this system is weaker than Scala/DOT's
+  type bounds, it nonetheless allows for simple transitivity proofs (which
+  have been a significant challenge in calculi with type bounds~\cite{rompf2016type}).
+
+\item {\textbf{Mechanization in Coq}:} All the systems in our case study have been formalized in the
+  Coq theorem prover~\cite{barras1997coq}. 
+\end{itemize}
+
+\end{comment}
+
+\section{Outline and contributions}
+In this thesis we discuss the introduction and elimination
+constructs for intersection and union types respectively.
+We also discuss the challenges involved in the integration of
+such constructs in a calculus.
+Moreover, we study the duality of subtyping
+with intersection and union types.
+We show that the duality of subtyping decreases the
+theoretical complexity of a calculus with dual features.
+All of the metatheory of this thesis has been formalized 
+in Coq\footnote{Coq is an interactive theorem prover where
+the proofs are written by humans
+and are machine-checked.}
+theorem prover and is available at:
+
+\begin{itemize}
+  \item \textbf{\Cref{chap:switch}:} \href{https://github.com/baberrehman/disjoint-switches}{\color{blue}{https://github.com/baberrehman/disjoint-switches}}
+
+  \item \textbf{\Cref{chap:disjointness}:} \href{https://github.com/baberrehman/phd-thesis-artifact/tree/main/chap4}{\color{blue}{https://github.com/baberrehman/phd-thesis-artifact/tree/main/artifact/chap4}}
+
+  \item \textbf{\Cref{chap:merge}:} \href{https://github.com/baberrehman/phd-thesis-artifact/tree/main/chap5}{\color{blue}{https://github.com/baberrehman/phd-thesis-artifact/tree/main/artifact/chap5}}
+
+  \item \textbf{\Cref{chap:duo}:} \href{https://github.com/baberrehman/coq-duotyping}{\color{blue}{https://github.com/baberrehman/coq-duotyping}}
+
+  \item \textbf{\Cref{appendix1}:} \href{https://github.com/baberrehman/phd-thesis-artifact/tree/main/appendixA}{\color{blue}{https://github.com/baberrehman/phd-thesis-artifact/tree/main/artifact/appendixA}}
+\end{itemize}
+
+\paragraph{Contributions towards disjoint switches.}
+We study union types with disjoint switches formally
+and in a language independent way. We present the \emph{union
+  calculus} (\name), which includes disjoint switches and union types.
+The notion of disjointness in \name is interesting in the sense that it is
+the dual notion of disjointness for intersection types.
+We prove several results, including \emph{type soundness}, \emph{determinism}
+and the \emph{soundness} and \emph{completeness} of algorithmic formulations
+of disjointness.
+We also study several extensions of \name. In particular,
+the first extension (discussed in Section~\ref{sec:inter}) adds intersection
+types, nominal types and distributive subtyping to \name.
+It turns out such extension is non-trivial, as it reveals
+a challenge that arises for disjointness when combining
+union and intersection types:
+the dual notion of disjointness borrowed from
+disjoint intersection types no longer works, and we must employ
+a novel, more general, notion instead. Such change also has an impact
+on the algorithmic formulation of disjointness, which must change as
+well. We also study two other extensions for
+parametric polymorphism and a subtyping rule for a class of empty types in this thesis.
+We prove that all the extensions retain the original properties of \name. Furthermore,
+for our subtyping relation in Section~\ref{sec:inter} we give a \emph{sound}, \emph{complete} and
+\emph{decidable} algorithmic formulation by extending the algorithmic formulation employing
+\emph{splittable types} by~\cite{huang2021distributing}.
+
+To illustrate the applications of disjoint switches,
+we show that they provide an alternative to
+certain forms of \emph{overloading}, and they enable a simple approach to
+\emph{nullable (or optional) types}.
+We also study \name with the merge operator 
+\citep{oliveira2016disjoint,dunfield2014elaborating,reynolds1988preliminary}
+and the resulting calculus is called \namems.
+The merge operator is an introduction form for intersection types.
+This addition results in another category of challenges
+for determinism. Therefore, \namems studied in this thesis
+is non-deterministic but type-safe.
+All the results about \name, its
+extensions, and \namems have been formalized in the Coq theorem prover.
+
+\paragraph{Contributions towards duality.}
+To evaluate a design based on \nameduo against traditional designs of subtyping,
+we formalized various calculi with common OOP features (including union types,
+intersection types and bounded quantification) in Coq in both styles.
+Our results show that the metatheory when using \nameduo has similar
+complexity and size compared to traditional designs. However, the \nameduo
+formalizations come with more features (for instance
+lower-bounded quantification) that dualize other well-known features
+(upper-bounded quantification). Finally, we also show that \nameduo can
+significantly simplify transitivity proofs for many of the calculi studied
+by us.
+
+\paragraph{Outline.}
+The outline of the thesis is:
+
+\begin{itemize}
+  \item \Cref{chap:background} provides related background.
+      Specifically, this chapter discusses the background of
+      intersection types, merge operator, union types and
+      elimination constructs for union types. Finally,
+      this chapter discusses the concept of duality in
+      logic and in programming languages. 
+
+  \item \Cref{chap:switch} studies a union calculus for deterministic
+      elimination of union types. The calculus is called \name.
+      Later parts of \cref{chap:switch} enrich \name with advance
+      features including intersection types, subtyping distributivity,
+      nominal types and a restrictive form of disjoint polymorphism based
+      on the ground types restriction.
+
+  \item \Cref{chap:disjointness} further increases the expressiveness
+      of disjoint polymorphism. In particular, this chapter
+      removes ground type restriction from disjoint polymorphism
+      and studies a novel disjointness algorithm based on
+      splittable types \citep{huang2021distributing}.
+
+  \item \Cref{chap:merge} studies \name with the merge operator.
+      The merge operator \citep{oliveira2016disjoint,dunfield2014elaborating,reynolds1988preliminary}
+      is an introduction form for intersection types.
+      The resulting calculus is called \namems.
+      The integration of the merge operator and disjoint
+      switches result in novel challenges for
+      determinism. Therefore, \namems retains type-safety
+      but lacks determinism. This chapter also studies the
+      completeness of \namems with respect to \cite{dunfield2014elaborating}.
+
+  \item \Cref{chap:duo} Studies the duality of subtyping formally
+      with intersection and union types. The duality
+      of subtyping results in various benefits such as reduced
+      complexity in the metatheory and extra features of lower bounds
+      and lower bounded quantification.
+
+
+  \item \Cref{chap:related,chap:future} discuss the related work
+      and the future work respectively.
+
+  \item \Cref{appendix1} studies another variant of algorithmic
+      disjointness based on the so called Common Ordinary Subtypes
+      (COST).
+\end{itemize}
+
+A part of this thesis is based on the following
+publications:
+
+\begin{itemize}
+  \item \textbf{\Cref{chap:switch}:} Baber Rehman, Xuejing Huang, 
+  Ningning Xie and Bruno C. d. S. Oliveira. 2022. 
+  ``Union Types with Disjoint Switches''. In
+  \emph{European Conference on Object-Oriented Programming (ECOOP)}.
+
+  \item \textbf{\Cref{chap:merge}:} Baber Rehman and Bruno C. d. S. Oliveira. 2023. 
+  ``Type Soundness with Unrestricted Merges''. (In Submission).
+  \emph{Journal of Functional Programming (JFP)}.
+
+  \item \textbf{\Cref{chap:duo}:} Bruno C. d. S. Oliveira, Cui Shaobo
+   and Baber Rehman. 2020. ``The Duality of Subtyping''. In
+  \emph{European Conference on Object-Oriented Programming (ECOOP)}.
+\end{itemize}
+
+\paragraph{Prerequisites.}
+A background in type systems is assumed to understand the technical contents of
+this thesis. Interested readers may go over
+\emph{Types and Programming Languages} \citep{pierce2002types} or
+volume 1 and volume 2 of \emph{Software Foundations} \citep{pierce2010software}
+to acquire the relevant technical background.
+
+
+%---------------------------------------------------------------------------%%
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../Thesis"
+%%% org-ref-default-bibliography: "../Thesis.bib"
+%%% End:

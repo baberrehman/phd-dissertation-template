@@ -1,0 +1,2945 @@
+% key idea: keep the original annotation and the outermost one for lambdas
+% new idea: drop u and r
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% METAVARIABLES
+
+metavar var, x, y, f, X ::= {{ repr-locally-nameless }}
+
+metavar i ::= {{ coq nat }}
+
+indexvar index, m ::=  {{ hol num }} {{ coq nat }}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% GRAMMAR (LNgen portion)
+
+grammar
+
+  typ, A, B, C, D, I, S, P {{ tex \mathsf{P} }},
+  Aord {{ tex [[A]]^\circ }}, Bord {{ tex [[B]]^\circ }}, Cord {{ tex [[C]]^\circ }}
+  % Odd {{ tex \mathsf{Odd}  }}, Even {{ tex \mathsf{Even}  }}
+                           :: 't_' ::=     {{ com type }}
+    | Top                  ::   :: top {{ tex \top }}
+    | Int                  ::   :: int     {{ tex \mathsf{Int}  }}
+    | Bool                 ::   :: bool     {{ tex \mathsf{Bool}  }}
+    | String               ::   :: str     {{ tex \mathsf{String}  }}
+    | Char                 ::   :: char     {{ tex \mathsf{Char}  }}
+    | Bot                  ::   :: bot     {{ tex \bot }}
+    | A -> B               ::   :: arrow
+    | A \/ B               ::   :: union
+    | A /\ B               ::   :: inter
+    | ( A )                :: S :: paren   {{ coq ([[A]]) }}
+    | dyntype e            ::   :: dyntype {{ tex \lfloor [[e]] \rfloor }}
+    | inptype e            ::   :: inptype {{ tex \lfloor [[e]] \rfloor^{\lambda} }}
+
+    | Null                 ::   :: null {{ tex \mathsf{Null} }}
+    | a                    ::   :: tvar
+    | \ A . B              ::   :: tall {{ tex \forall ([[a]] * [[A]]) . [[B]] }}
+    | B [ a := A ]         ::   :: tvarsub
+    | { A1 , .. , Am }     ::   :: list
+    | GT                   ::   :: groundtype {{ tex G }}
+    | GT1                  ::   :: gt1 {{ tex G_{1} }}
+    | GT2                  ::   :: gt2 {{ tex G_{2} }}
+    | \ A bq B             ::   :: tallbq {{ tex \forall ([[a]] <: [[A]]) . [[B]] }}
+    | Odd                  :: M :: odd  {{ tex \mathsf{Odd}  }}
+    | Even                 :: M :: even  {{ tex \mathsf{Even}  }}
+
+    % DuoTyping type constructs
+
+    | chooseType A B       ::   :: chtyp {{ tex [[A]] \ [[duo]]_? \ [[B]] }}
+    | fchooseType A B      ::   :: fchtyp {{ tex [[A]] \ [[fduo]]_? \ [[B]] }}
+    | selBound             ::   :: bndSel {{ tex \rceil [[duo]] \lceil }}
+    | selPolyBound A B     ::   :: bndPolySel {{ tex [[A]] \ \widetilde{[[duo]]}_{2} \ [[B]] }}
+    | fselBound            ::   :: fbndSel {{ tex \rceil [[fduo]] \lceil }}
+    | kfs a mode A B       ::   :: kfs {{ tex \forall[[a]] [[mode]] [[A]].[[B]] }}
+    | fs a A               ::   :: fs {{ tex \forall[[a]].[[A]] }}
+    | forall a A B         ::   :: forallbq {{ tex \forall([[a]] [[duo]] [[A]]).[[B]]  }}
+
+
+
+
+  exp, e, v, p, w, 1 {{ tex 1 }}, 2 {{ tex 2 }}, 3 {{ tex 3 }}, neg {{ tex \mathsf{not} }}, succ {{ tex \mathsf{succ} }}, pred {{ tex \mathsf{pred} }}
+                           :: 'e_' ::=     {{ com expression }}
+    | x                    ::   :: var
+    | f                    ::   :: varf
+    | i                    ::   :: lit
+    | b                    ::   :: bexpr
+    | s                    ::   :: strexpr
+    | e : A                ::   :: ann
+    | \ x . e              ::   :: abs     (+ bind x in e +)
+    | \ x : A . e          ::   :: absan
+    | \ f . e              ::   :: absf     (+ bind f in e +)
+    | e1 e2                ::   :: app
+    | switch e A e1 B e2   ::   :: switch {{ tex \mathsf{switch} \ [[e]] \ \{(x:[[A]])[[->]][[e1]], (y:[[B]])[[->]][[e2]]\}  }}
+    | ( e )                :: S :: paren   {{ coq ([[e]]) }}
+    | e1 [ x ~> e2 ]       :: M :: subst   {{ coq (open_exp_wrt_exp [[x e1]] [[e2]]) }}
+    | betavalue v A B      ::   :: betavalue {{ tex [[v]] \mathbin{\lhd} [[A]] \mathbin{\lhd} [[B]] }}
+    | null                 ::   :: null   {{ tex \mathsf{null} }}
+    | new A                ::   :: new    {{ tex \mathsf{new} ~ [[A]] }}
+    | erase e              ::   :: erase {{ tex \lceil [[e]] \rceil }}
+    | e [ a ~> A ]         ::   :: tsubst
+    | e A                  ::   :: tapp
+    | \ A . e              ::   :: tabs  {{ tex \Lambda ([[a]] * [[A]]) . [[e]] }}
+    | true                 ::   :: tru {{ tex \mathsf{true} }}
+    | false                ::   :: fls {{ tex \mathsf{false} }}
+    | e1 ,, e2             ::   :: merge
+    | e1 , e2              ::   :: pair
+    | etop                 ::   :: etop  {{ tex \top }}
+    | /\ a mode A . e      ::   :: tabsduo {{ tex \Lambda ([[a]] [[mode]] [[A]]) . [[e]] }}
+    | ? ?                  ::   :: qqq
+    | fix x . e            ::   :: fixpoint {{ tex \mathsf{fix} \ x . [[e]] }}
+    | fix x . e . A        ::   :: fixpointan {{ tex \mathsf{fix} \ x . [[e]] : [[A]] }}
+    | E [ e ]              ::   :: unionelim
+    | E                    ::   :: evalctxexpr
+
+
+
+mode {{ tex \Diamond }} :: 'mode_' ::=                                      
+  | msub           :: :: msub
+  | msup           :: :: msup
+  | duo            :: :: duo
+  | fduo           :: :: fduo
+  | fsub           :: :: fsub
+  | fsup           :: :: fsup
+  | smode          :: :: smode
+
+substitutions
+  single exp x   :: subst
+
+freevars
+  exp x      :: fv
+
+parsing
+  t_arrow right t_arrow
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% GRAMMAR  (non LNgen portion)
+
+grammar
+
+
+  ctxp, PG {{ tex \Delta }} :: 'ctxp_' ::=    {{ com primitive types context }}
+                                           {{ coq list ( nat * typ ) }}
+    | []                   ::  :: empty    {{ coq nil }} {{ tex \cdot }}
+    | PG , P <: A          ::  :: consdec  {{ tex [[PG]], \mathsf{[[P]]} \leq [[A]] }}
+    | P1 <: A , P2 <: B    :: M:: two
+    | ( PG )               ::  :: paren
+    | PG , P <~ A          ::  :: conslgo  {{ tex [[PG]], \mathsf{[[P]]} <: [[A]] }}
+
+
+  ctx, G {{ tex \Gamma }} :: 'ctx_' ::=    {{ com typing context }}
+                                           {{ coq list ( atom * typ ) }}
+    | []                   ::  :: empty    {{ coq nil }} {{ tex \cdot }}
+    | G , x : A            ::  :: cons     {{ coq (([[x]]~[[A]])++[[G]]) }}
+    | G , y : A            ::  :: consy    {{ coq (([[y]]~[[A]])++[[G]]) }}
+    | G , X : A            ::  :: tcons    {{ coq (([[X]]~[[A]])++[[G]]) }}
+    | G , x : A , G1       ::  :: conss
+    | G , G1               ::  :: consss
+    | G , a * A            ::  :: const
+    | PG , G               ::  :: consp   {{ tex [[PG]] ; [[G]] }}
+    | G [ a := A ]         ::  :: conssubst
+    | G , a mode A         ::  :: typ_var_mode
+    | G , a                ::  :: type_var
+
+
+
+  dirflag {{ tex \Leftrightarrow }} :: '' ::=  {{ com typing direction }}
+    | =>                   ::  :: infer    {{ tex \Rightarrow }}
+    | <=                   ::  :: check    {{ tex \Leftarrow }}
+
+terminals :: 'terminals_' ::=
+  | \                    ::  :: lambda     {{ tex \lambda }}
+  | -->                  ::  :: red        {{ tex \longrightarrow }}
+  | ~>                   ::  :: leadsto    {{ tex \leadsto }}
+  | ->                   ::  :: arrow      {{ tex \rightarrow }}
+  | \/                   ::  :: or         {{ tex \vee }}
+  | /\                   ::  :: and        {{ tex \wedge }}
+  | |-                   ::  :: turnstile  {{ tex \vdash }}
+  | <:                   ::  :: sub        {{ tex <: }}
+  | :>                   ::  :: supp        {{ tex :> }}
+  | in                   ::  :: in         {{ tex \in }}
+  | ;                    ::  :: ctxAnd     {{ tex ; }}
+  | fv                   ::  :: fv         {{ tex \mathsf{fv}\! }}
+  | a                    ::  :: tvar       {{ tex \alpha }}
+  | :=                   ::  :: subst      {{ tex \leadsto }}
+  | ,,                   ::  :: mop        {{ tex \quotesinglbase\quotesinglbase }}
+  | msub                 ::  :: msub        {{ tex <: }}
+  | msup                 ::  :: msup        {{ tex :> }}
+  | duo                  ::  :: duo         {{ tex \Diamond }}
+  | fduo                 ::  :: fduo        {{ tex \overline{\Diamond} }}
+  | fsub                 ::  :: fsub    {{ tex \overline{\textless:} }}
+  | fsup                 ::  :: fsup    {{ tex \overline{:\textgreater} }}
+  | smode                ::  :: smode   {{ tex \mid\!\Diamond_1\!\mid_{\Diamond_2} }}
+  | E                    ::  :: evalctx {{ tex \mathscr{E} }}
+
+formula :: 'formula_' ::=
+  | judgement                ::   :: judgement
+  | not formula              :: M :: not {{ tex \neg [[formula]] }} {{ coq not ([[formula]]) }}
+  | uniq G                   ::   :: uniqG {{ coq uniq [[G]] }} {{ tex  }}
+  | x : A in G               ::   :: inG {{ coq binds [[x]][[A]][[G]] }}
+  | x notin fv e             ::   :: fresh {{ coq [[x]] \notin fv[[e]] }}
+  | x notin dom G            ::   :: notInGx {{ coq ~ AtomSetImpl.In [[x]] (dom [[G]]) }} {{ tex [[x]] \notin [[G]] }}
+  | a * A in G               ::   :: disj
+  | P in dom PG              ::   :: inPG {{ tex \mathsf{P} \in dom ~ [[PG]] }}
+  | P notin dom PG           ::   :: inotPG {{ tex \mathsf{[[P]]} \notin dom ~ [[PG]] }}
+  | B in subtypes PG A       ::   :: inotPGsub {{ tex \mathsf{[[B]]} \in [[PG]]_{[[A]]} }}
+  | inter subs PG A B empty  ::   :: intersubsnom {{ tex [[A]]::[[PG]]([[A]]) \cap [[B]]::[[PG]]([[B]])  = \{\} }}
+  | P <<: A in PG            ::   :: inpsub {{ tex \mathsf{P} \leq [[A]] \in [[PG]] }}
+  | P1 <> P2                 ::   :: primNotEq {{ tex [[P1]] \neq [[P2]] }}
+  | x in G                   ::   :: xinG {{ tex [[x]] \in [[G]] }}
+  | a in G                   ::   :: ainG {{ tex [[a]] \in [[G]] }}
+  | a mode A in G            ::   :: tvarmode {{ tex [[a]] [[mode]] [[A]] \in [[G]] }}
+  | A = B                    ::   :: typeeq
+
+
+
+
+defns
+PreValue :: '' ::=
+
+  defn
+  prevalue e ::   :: pexpr :: 'pexpr_'
+  {{ com PreValues }}
+  {{ tex  }}
+  by
+
+    ------------ :: int
+    prevalue i
+
+    ------------ :: bool
+    prevalue b
+
+    ------------ :: str
+    prevalue s
+
+    --------------------------- :: abs
+    prevalue (\x.e):A -> B
+
+
+defns
+AValue :: '' ::=
+
+  defn
+  avalue e ::   :: avalue :: 'aval_'
+  {{ com AValues }}
+  {{ tex AValue \ \ [[e]] }}
+  by
+
+    prevalue p
+    ------------ :: pval
+    avalue p : A
+
+
+defns
+Value :: '' ::=
+
+  defn
+  value e ::   :: value :: 'val_'
+  {{ com Values }}
+  by
+
+    avalue e
+    ------------ :: aval
+    value e
+
+    -----------  :: abs
+     value \x.e
+
+
+defns
+FindType :: '' ::=
+
+  defn
+  findtype p A ::   :: findtype :: 'findtype_'
+  {{ com DynamicType }}
+  {{ tex [[A]] = \rfloor[[p]]\lfloor }}
+  by
+
+    ---------------- :: int
+    findtype i Int
+
+    ---------------- :: bool
+    findtype b Bool
+
+    ---------------- :: str
+    findtype s String
+
+    ------------------------------------ :: arrow
+    findtype ((\x.e) : A -> B) (A -> B)
+
+
+
+defns
+FindSubTypes :: '' ::=
+
+  defn
+  findsubtypes A ::   :: fs :: 'fs_'
+  {{ tex |[[A]]| }}
+  {{ com FindSubTypes }}
+  by
+
+defns
+FindSubTypesP :: '' ::=
+
+  defn
+  findsubtypesp PG A ::   :: fsp :: 'fsp_'
+  {{ tex |[[A]]|_{[[PG]]} }}
+  {{ com FindSubTypesp }}
+  by
+
+  defn
+  findsubpoly PG G A ::   :: fspoly :: 'fspoly_'
+  {{ tex |[[A]]|_{[[PG]] ; [[G]]} }}
+  by
+
+defns
+NominalSubtypes :: '' ::=
+
+  defn
+  nominalsub PG A ::   :: ns :: 'ns_'
+  {{ tex [[PG]]([[A]]) }}
+  by
+
+defns
+IsNominalSubtype :: '' ::=
+
+  defn
+  isnominalsub PG A B ::   :: ins :: 'ins_'
+  {{ tex [[A]] \leq [[B]] \in [[PG]] }}
+  by
+
+
+%% FindSubTypesEmpty needed for disj subtyping rule
+defns
+FindSubTypesEmpty :: '' ::=
+
+  defn
+  findsubtypesempty A ::   :: fse :: 'fse_'
+  {{ tex |[[A]]| = \{\} }}
+  by
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Ordinary Types
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+Ordinary :: '' ::=
+  defn
+  ordinary A ::  :: ordinary :: 'ord_'
+  {{ tex \mathsf{Ord} ~ [[A]] }}
+  {{ com Ordinary Types }}
+  by
+
+  ---------------- :: top
+  ordinary Top
+
+
+  ---------------- :: int
+  ordinary Int
+
+  ---------------- :: bool
+  ordinary Bool
+
+  ---------------- :: str
+  ordinary String
+
+
+  ---------------- :: arrow
+  ordinary A -> B
+
+
+  ---------------- :: null
+  ordinary Null
+
+
+  okp PG
+  wft PG P
+  --------------- :: prim
+  ordinary P
+
+
+defns
+Ordinaryn :: '' ::=
+  defn
+  ordinaryn PG |- A ::  :: ordinaryn :: 'ordn_'
+  {{ tex Ord ~ \Delta [[|-]] [[A]] }}
+  {{ com Ordinary Types }}
+  by
+
+  ---------------- :: top
+  ordinaryn PG |- Top
+
+
+  ---------------- :: int
+  ordinaryn PG |- Int
+
+  ---------------- :: bool
+  ordinaryn PG |- Bool
+
+  ---------------- :: str
+  ordinaryn PG |- String
+
+
+  ---------------- :: arrow
+  ordinaryn PG |- A -> B
+
+
+  ---------------- :: null
+  ordinaryn PG |- Null
+
+
+%  okp PG
+  wft PG P
+  --------------- :: prim
+  ordinaryn PG |- P
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%% Splittable and Ordinary types %%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+US :: '' ::=
+
+    defn
+    B <=u A u=> C ::  :: US :: usp_
+    {{ tex [[B]] \triangleleft [[A]] \triangleright [[C]] }}
+    {{ com Union Splitable Types }}
+
+    by
+
+    ------------------ :: or
+    A <=u A \/ B u=> B
+
+    A1 <=u A u=> A2
+    --------------------- :: orandl
+    A1/\B <=u A /\ B u=> A2/\B
+
+    B1 <=u B u=> B2
+    --------------------- :: orandr
+    A/\B1 <=u A /\ B u=> A/\B2
+
+
+defns
+UO :: '' ::=
+
+    defn
+    UO A ::  :: UO :: uo_
+    {{ tex [[A]]^{\circledcirc} }}
+    {{ com Union Ordinary Types }}
+
+    by
+
+     ---------------- :: top
+      UO Top
+
+     ---------------- :: int
+      UO Int
+
+     ---------------- :: arrow
+      UO (A -> B)
+
+     ---------------- :: unit
+       UO Null
+
+      UO A
+      UO B
+     ---------------- :: and
+        UO (A /\ B)
+
+     
+     --------------- :: tvar
+        UO a
+
+     
+     --------------- :: all
+      UO \A . B
+
+
+      --------------- :: nom
+        UO P
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% well-formed types
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+wellformd :: '' ::=
+  defn
+  wft PG A ::  :: wellformd :: 'wft_'
+  {{ tex [[PG]] [[|-]] [[A]] }}
+  {{ com well-form Types }}
+  by
+
+  ---------------- :: top
+  wft PG Top
+
+  ---------------- :: bot
+  wft PG Bot
+
+  ---------------- :: int
+  wft PG Int
+
+  wft PG A
+  wft PG B
+  ---------------- :: arrow
+  wft PG A -> B
+
+  --------------- :: null
+  wft PG Null
+
+  wft PG A
+  wft PG B
+  ---------------- :: or
+  wft PG A \/ B
+
+  wft PG A
+  wft PG B
+  ---------------- :: and
+  wft PG A /\ B
+
+  P in dom PG
+  ---------------- :: prim
+  wft PG P
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% well-formedness with polymorphism
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+PolyWellFormedness :: '' ::=
+
+  defn
+  PG ; G |- A ::   :: polywft :: 'polywf_'
+  {{ com Well Formed Types }}
+  by
+
+    uniq G
+    ----------------- :: z
+    PG ; G |- Int
+
+    a * A in G
+    -------------- :: a
+    PG ; G |- a
+
+    uniq G
+    ----------------- :: Top
+    PG ; G |- Top
+
+    uniq G
+    ----------------- :: Bot
+    PG ; G |- Bot
+
+    uniq G
+    ----------------- :: arrow
+    PG ; G |- A -> B
+
+    uniq G
+    PG ; G |- A
+    PG ; G |- B
+    ----------------- :: or
+    PG ; G |- A \/ B
+
+    uniq G
+    PG ; G |- A
+    PG ; G, a * A |- B
+    ----------------- :: all
+    PG ; G |- \ A . B
+
+
+    P in dom PG
+    ---------------- :: prim
+    PG ; G |- P
+
+
+defns
+Disjointnesssplitax :: '' ::=
+
+  defn
+  PG ; G |-  A *ax B ::  :: disjointnesssplitax :: 'adpa_'
+  {{ tex [[PG]]; [[G]] [[|-]] [[A]] *_{ax} [[B]] }}
+  {{ com Disjointness Axioms }}
+  by
+
+    ---------------------- :: bot
+    PG ; G |-  Bot *ax A
+
+
+    -------------------------- :: intarr
+    PG ; G |- Int *ax A -> B
+
+
+    ---------------------- :: intnull
+    PG ; G |- Int *ax Null
+
+
+    ------------------------- :: intall
+    PG ; G |- Int *ax \A.B
+
+
+    ---------------------- :: nullarr
+    PG ; G |- Null *ax A -> B
+
+
+    ------------------------- :: nullall
+    PG ; G |- Null *ax \A.B
+
+
+    ------------------------- :: arrall
+    PG ; G |- C->D *ax \A.B
+
+
+    -------------------------- :: pint
+    PG ; G |- P *ax Int
+
+    
+    -------------------------- :: parr
+    PG ; G |- P *ax A->B
+
+
+    -------------------------- :: pnull
+    PG ; G |- P *ax Null
+
+
+    -------------------------- :: pall
+    PG ; G |- P *ax \A.B
+
+
+    PG ; G |- A *ax B
+    ------------------------- :: sym
+    PG ; G |- B *ax A
+
+
+defns
+Disjointnesssplit :: '' ::=
+
+  defn
+  PG ; G |-  A * B ::  :: disjointnesssplit :: 'adp_'
+  {{ tex [[PG]]; [[G]] [[|-]] [[A]] * [[B]] }}
+  {{ com Algorithmic Disjointness }}
+  by
+
+    -------------------- :: botl
+    PG ; G |-  Bot * A
+
+
+    -------------------- :: botr
+    PG ; G |-  A * Bot
+
+
+    ---------------------- :: intarrl
+    PG ; G |- Int * A -> B
+
+
+    ---------------------- :: intarrr
+    PG ; G |- A -> B * Int
+
+
+    ---------------------- :: nullarrl
+    PG ; G |- Null * A -> B
+
+
+    ---------------------- :: nullarrr
+    PG ; G |- A -> B * Null
+
+
+    ---------------------- :: intnulll
+    PG ; G |- Int * Null
+
+
+    ---------------------- :: intnullr
+    PG ; G |- Null * Int
+
+
+    ------------------------- :: allintl
+    PG ; G |- \A.B * Int
+
+
+    ------------------------- :: allintr
+    PG ; G |- Int * \A.B
+
+
+    ------------------------- :: allarrl
+    PG ; G |- \A.B * C->D
+
+
+    ------------------------- :: allarrr
+    PG ; G |- C->D * \A.B
+
+
+    ------------------------- :: allnulll
+    PG ; G |- \A.B * Null
+
+
+    ------------------------- :: allnullr
+    PG ; G |- Null * \A.B
+
+    a * A in G
+    PG ; G |- B <: A
+    ------------------------- :: varl
+    PG ; G |- a * B
+
+
+    a * A in G
+    PG ; G |- B <: A
+    ------------------------- :: varr
+    PG ; G |- B * a
+
+
+    A1 <=u A u=> A2
+    PG ; G |- A1 * B
+    PG ; G |- A2 * B
+    ------------------------- :: orl
+    PG ; G |- A * B
+
+
+    B1 <=u B u=> B2
+    PG ; G |- A * B1
+    PG ; G |- A * B2
+    ------------------------- :: orr
+    PG; G |- A * B
+
+
+    PG ; G |- A1 * B
+    % UO B
+    ------------------------- :: andl
+    PG; G |- (A1/\A2) * B
+
+    PG ; G |- A2 * B
+    % UO B
+    ------------------------- :: andls
+    PG; G |- (A1/\A2) * B
+
+    PG ; G |- A * B1
+    % UO A
+    ------------------------- :: andr
+    PG; G |- A * (B1/\B2)
+
+    PG ; G |- A * B2
+    % UO A
+    ------------------------- :: andrs
+    PG ; G |- A * (B1/\B2)
+
+    PG ; G |- A * B
+    ------------------------- :: emptyl
+    PG ; G |- (A/\B) * C
+
+    PG ; G |- B * C
+    ------------------------- :: emptyr
+    PG ; G |- A * (B/\C)
+
+
+    inter subs PG P1 P2 empty
+    ------------------------------ :: nom
+    PG ; G |- P1 * P2
+
+
+    PG ; G |- A *ax B
+    -------------------------- :: axiom
+    PG ; G |- A * B
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% okenvp
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+okpenv :: '' ::=
+  defn
+  okp PG ::  :: wellformdpenv :: 'okp_'
+  {{ tex ok ~[[PG]] }}
+  {{ com well-formed [[PG]] }}
+  by
+
+  ---------------- :: empty
+  okp []
+
+  % okp PG
+  % wft PG A
+  % P notin dom PG
+  % ---------------- :: setin
+  % okp PG , P <: A
+
+  okp PG
+  P notin dom PG
+  ---------------- :: cons
+  okp PG , P <: Top
+
+  okp PG
+  wft PG P2
+  P1 notin dom PG
+  ---------------- :: sub
+  okp PG , P1 <: P2
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% well-formedness with polymorphism
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+GrountTypes :: '' ::=
+
+  defn
+  GType A ::   :: gtype :: 'gt_'
+  {{com Ground Types }}
+  {{ tex [[A]]_{g} }}
+  by
+
+    ----------------- :: top
+    GType Top
+
+    ----------------- :: bot
+    GType Bot
+
+    ----------------- :: int
+    GType Int
+
+    ---------------- :: null
+    GType Null
+
+    ----------------- :: arrow
+    GType ( A -> B )
+
+    GType A
+    GType B
+    ----------------- :: or
+    GType ( A \/ B )
+
+    GType A
+    GType B
+    ----------------- :: and
+    GType ( A /\ B )
+
+    GType A
+    GType B
+    ----------------- :: all
+    GType ( \ A . B )
+
+    ---------------- :: prim
+    GType P
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Ordinary Subtypes
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+OrdinarySubtypes :: '' ::=
+
+  defn
+  osubs A B ::  :: ordinarysubs :: 'ordsubs_'
+  {{ tex  [[A]] ~ = ~ [[B]] }}
+  {{ com Ordinary Subtypes }}
+  by
+
+  ---------------------------------------- :: top
+  osubs Top { Int , Top -> Bot , Null }
+
+  ---------------------------------------- :: int
+  osubs Int { Int }
+
+  ---------------------------------------- :: arrow
+  osubs A -> B { Top -> Bot }
+
+  ---------------------------------------- :: null
+  osubs Null { Null }
+
+
+% following definition is just to display A *s B
+% No other use of this definition anywhere else
+defns
+DisjointnessSpec :: '' ::=
+
+  defn
+  A *s B ::  :: disjointnessspec :: ds_
+  {{ tex [[A]] * [[B]] }}
+  {{ com DisjointnessSpec }}
+
+  by
+
+defns
+DisjointnessSpecp :: '' ::=
+
+  defn
+  PG |- A *s B ::  :: disjointnessspecp :: dsp_
+  {{ tex [[PG]] [[|-]] [[A]] *_s [[B]] }}
+  {{ com DisjointnessSpec Nominal Types }}
+
+  by
+
+
+%defns
+%DisjointnessAlgoPoly :: '' ::=
+
+%  defn
+%  PG ; G |- A * B ::  :: disjointalgopoly :: disjalgopoly_
+%  {{ tex [[PG]] ; [[G]] [[|-]] [[A]] * [[B]] }}
+%  {{ com Disjointness with polymorphism }}
+
+ % by
+
+
+% following definition is just to display BottomLikeSpec
+% No other use of this definition anywhere else
+defns
+BottomLikeSpec :: '' ::=
+
+  defn
+  BottomLikeSpec A ::  :: btmlikespec :: bs_
+  {{ tex \rfloor [[A]] \lfloor_s }}
+  {{ com BottomLikeSpec }}
+
+  by
+
+defns
+BottomLike :: '' ::=
+
+  defn
+  botlike A ::  :: bottomlike :: 'bl_'
+  {{ tex \rfloor [[A]] \lfloor}}
+  {{ com Bottom-Like Types }}
+  by
+
+    -------------------- :: bot
+    botlike Bot
+
+    botlike A
+    botlike B
+    -------------------------     :: or
+    botlike A \/ B
+
+
+    botlike A
+    -------------------------     :: andl
+    botlike A /\ B
+
+
+    botlike B
+    -------------------------     :: andr
+    botlike A /\ B
+
+
+    A * B
+    -------------------------     :: anddisj
+    botlike A /\ B
+
+
+    not A <: B
+    not B <: A
+    ---------------------------     :: andsub
+    botlike A /\ B
+
+
+defns
+TopLike :: '' ::=
+
+  defn
+  toplike A ::  :: toplike :: 'tl_'
+  {{ tex \rceil [[A]] \lceil}}
+  {{ com Top-Like Types }}
+  by
+
+
+defns
+Disjointness :: '' ::=
+
+  defn
+  A * B ::  :: disjointness :: ad_
+  {{ tex [[A]] *_a [[B]] }}
+  {{ com Disjointness }}
+
+  by
+
+    -------------------- :: btmr
+    A * Bot
+
+    -------------------- :: btml
+    Bot * A
+
+    -------------------- :: intl
+    Int * A -> B
+
+    -------------------- :: intr
+    A -> B * Int
+
+    -------------------- :: null_intl
+    Null * Int
+
+    -------------------- :: null_intr
+    Int * Null
+
+    -------------------- :: null_funl
+    Null * A -> B
+
+    -------------------- :: null_funr
+    A -> B * Null
+
+    A * C
+    B * C
+    -------------------------     :: orl
+    A \/ B * C
+
+    A * B
+    A * C
+    -------------------------     :: orr
+    A * B \/ C
+
+    A * C
+    -------------------------     :: andla
+    A /\ B * C
+
+    B * C
+    -------------------------     :: andlb
+    A /\ B * C
+
+    A * B
+    -------------------------     :: andra
+    A * B /\ C
+
+    A * C
+    -------------------------     :: andrb
+    A * B /\ C
+
+
+    findsubtypes (A /\ B)
+    ------------------------- :: disjl
+    A * B
+
+    findsubtypes (B /\ A)
+    ------------------------- :: disjr
+    A * B
+
+    A1 <=u A u=> A2
+    A1 * B
+    A2 * B
+    ------------------------- :: orll
+    A * B
+
+
+    B1 <=u B u=> B2
+    A * B1
+    A * B2
+    ------------------------- :: orrr
+    A * B
+
+
+    A1 * B
+    UO B
+    ------------------------- :: andll
+    (A1/\A2) * B
+
+
+    A2 * B
+    UO B
+    ------------------------- :: andlss
+    (A1/\A2) * B
+
+
+    A * B1
+    UO A
+    ------------------------- :: andrr
+    A * (B1/\B2)
+
+
+    A * B2
+    UO A
+    ------------------------- :: andrss
+    A * (B1/\B2)
+
+
+    A * B
+    ------------------------- :: emptyl
+    (A/\B) * C
+
+
+    B * C
+    ------------------------- :: emptyr
+    A * (B/\C)
+
+
+defns
+Disjointnesspoly :: '' ::=
+
+  defn
+  G |-  A * B ::  :: disjointnessploy :: 'dply_'
+  {{ tex [[G]] [[|-]] [[A]] * [[B]] }}
+  {{ com Algorithmic Disjointness }}
+  by
+
+    -------------------- :: botl
+    G |-  Bot * A
+
+
+    -------------------- :: botr
+    G |-  A * Bot
+
+
+    ---------------------- :: intarrl
+    G |- Int * A -> B
+
+
+    ---------------------- :: intarrr
+    G |- A -> B * Int
+
+
+    ---------------------- :: nullarrl
+    G |- Null * A -> B
+
+
+    ---------------------- :: nullarrr
+    G |- A -> B * Null
+
+
+    ---------------------- :: intnulll
+    G |- Int * Null
+
+
+    ---------------------- :: intnullr
+    G |- Null * Int
+
+
+    ------------------------- :: allintl
+    G |- \A.B * Int
+
+
+    ------------------------- :: allintr
+    G |- Int * \A.B
+
+
+    ------------------------- :: allarrl
+    G |- \A.B * C->D
+
+
+    ------------------------- :: allarrr
+    G |- C->D * \A.B
+
+
+    ------------------------- :: allnulll
+    G |- \A.B * Null
+
+
+    ------------------------- :: allnullr
+    G |- Null * \A.B
+
+    a * A in G
+    G |- B <: A
+    ------------------------- :: varl
+    G |- a * B
+
+
+    a * A in G
+    G |- B <: A
+    ------------------------- :: varr
+    G |- B * a
+
+
+    A1 <=u A u=> A2
+    G |- A1 * B
+    G |- A2 * B
+    ------------------------- :: orl
+    G |- A * B
+
+
+    B1 <=u B u=> B2
+    G |- A * B1
+    G |- A * B2
+    ------------------------- :: orr
+    G |- A * B
+
+
+    G |- A1 * B
+    UO B
+    ------------------------- :: andl
+    G |- (A1/\A2) * B
+
+    G |- A2 * B
+    UO B
+    ------------------------- :: andls
+    G |- (A1/\A2) * B
+
+    G |- A * B1
+    UO A
+    ------------------------- :: andr
+    G |- A * (B1/\B2)
+
+    G |- A * B2
+    UO A
+    ------------------------- :: andrs
+    G |- A * (B1/\B2)
+
+    G |- A * B
+    ------------------------- :: emptyl
+    G |- (A/\B) * C
+
+    G |- B * C
+    ------------------------- :: emptyr
+    G |- A * (B/\C)
+
+
+defns
+Subtyping :: '' ::=
+
+  defn
+  A <: B ::  :: subtyping :: s_
+  {{ com Subtyping }}
+  % {{ tex [[A]] <: [[B]] }}
+
+  by
+
+    -------------------- :: top
+    A <: Top
+
+    -------------------- :: bot
+    Bot <: A
+
+
+    -------------------- :: null
+    Null <: Null
+
+    -------------------- :: int
+    Int <: Int
+
+    -------------------- :: bool
+    Bool <: Bool
+
+    -------------------- :: str
+    String <: String
+
+    B1 <: A1
+    A2 <: B2
+    -------------------------     :: arrow
+    A1 -> A2 <: B1 -> B2
+
+    A <: C
+    B <: C
+    -------------------------     :: ora
+    A \/ B <: C
+
+    A <: B
+    -------------------------     :: orb
+    A <: B \/ C
+
+    A <: C
+    -------------------------     :: orc
+    A <: B \/ C
+
+    A <: B
+    A <: C
+    -------------------------     :: anda
+    A <: B /\ C
+
+    A <: C
+    -------------------------     :: andb
+    A /\ B <: C
+
+    B <: C
+    -------------------------     :: andc
+    A /\ B <: C
+
+    findsubtypesempty A
+    -------------------------      :: los
+    A <: B
+
+    A *s B
+    ------------------------       :: disj
+    A /\ B <: Bot
+
+defns
+DSubtyping :: '' ::=
+
+  defn
+  PG |- A <<: B ::  :: dsubtyping :: ds_
+  {{ com Declarative Subtyping }}
+  {{ tex [[PG]] [[|-]] [[A]] \leq [[B]] }}
+
+  by
+
+    okp PG
+    wft PG A
+    -------------------- :: refl
+    PG |- A <<: A
+
+    PG |- A <<: B
+    PG |- B <<: C
+    -------------------- :: trans
+    PG |- A <<: C
+
+    okp PG
+    wft PG A
+    -------------------- :: top
+    PG |- A <<: Top
+
+    okp PG
+    wft PG A
+    -------------------- :: bot
+    PG |- Bot <<: A
+
+    PG |- B1 <<: A1
+    PG |- A2 <<: B2
+    -------------------------     :: arrow
+    PG |- A1 -> A2 <<: B1 -> B2
+
+    PG |- A1 <<: B
+    PG |- A2 <<: B
+    -------------------------     :: ora
+    PG |- A1 \/ A2 <<: B
+
+    okp PG
+    wft PG A1
+    wft PG A2
+    -------------------------     :: orb
+    PG |- A1 <<: A1 \/ A2
+
+    okp PG
+    wft PG A1
+    wft PG A2
+    -------------------------     :: orc
+    PG |- A2 <<: A1 \/ A2
+
+    PG |- B <<: A1
+    PG |- B <<: A2
+    -------------------------     :: anda
+    PG |- B <<: A1 /\ A2
+
+    okp PG
+    wft PG A1
+    wft PG A2
+    -------------------------     :: andb
+    PG |- A1 /\ A2 <<: A1
+
+    okp PG
+    wft PG A1
+    wft PG A2
+    -------------------------     :: andc
+    PG |- A1 /\ A2 <<: A2
+
+    okp PG
+    wft PG A
+    wft PG B1
+    wft PG B2
+    ----------------------------------------- :: distarr
+    PG |- (A -> B1) /\ (A -> B2) <<: A -> (B1 /\ B2)
+
+    % ---------------------------------------- :: distarrrev
+    % PG |- A -> (B1 /\ B2) <<: (A -> B1) /\ (A -> B2)
+
+    okp PG
+    wft PG A1
+    wft PG A2
+    wft PG B
+    ----------------------------------------- :: distarru
+    PG |- (A1 -> B) /\ (A2 -> B) <<: (A1 \/ A2) -> B
+
+    % ----------------------------------------- :: distarrurev
+    % PG |- (A1 \/ A2) -> B <<: (A1 -> B) /\ (A2 -> B)
+
+    okp PG
+    wft PG A1
+    wft PG A2
+    wft PG B
+    ----------------------------------------- :: distor
+    PG |- (A1 \/ B) /\ (A2 \/ B) <<: (A1 /\ A2) \/ B
+
+    % ---------------------------------------- :: distand
+    % PG |- (A1 \/ A2) /\ B <<: (A1 /\ B) \/ (A2 /\ B)
+
+
+    okp PG
+    P <<: A in PG
+    ---------------- :: prim
+    PG |- P <<: A
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Algorithmic Subtyping
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+OrdinaryIU :: '' ::=
+
+  defn
+  ordinaryI A :: :: ordi :: OI_
+  {{ com Ordinary Types }}
+  {{ tex [[A]]~\mathsf{Ordinary} }}
+  by
+
+
+    ---------------- :: top
+    ordinaryI Top
+
+    ---------------- :: bot
+    ordinaryI Bot
+
+    ---------------- :: int
+    ordinaryI Int
+
+    ---------------- :: null
+    ordinaryI Null
+
+    ---------------- :: prim
+    ordinaryI P
+
+    ordinaryU A
+    ordinaryI B
+    ---------------- :: arrow
+    ordinaryI A->B
+
+    ordinaryI A
+    ordinaryI B
+    ---------------- :: or
+    ordinaryI A\/B
+
+
+  defn
+  ordinaryU A :: :: ordu :: OU_
+  {{ com Ordinary Types (for unions) }}
+  {{ tex [[A]]~\mathsf{OrdinaryU} }}
+  by
+
+    ---------------- :: top
+    ordinaryU Top
+
+    ---------------- :: bot
+    ordinaryU Bot
+
+    ---------------- :: int
+    ordinaryU Int
+
+    ---------------- :: null
+    ordinaryU Null
+
+    ---------------- :: prim
+    ordinaryU P
+
+    ---------------- :: arrow
+    ordinaryU A->B
+
+    ordinaryU A
+    ordinaryU B
+    ---------------- :: and
+    ordinaryU A/\B
+
+
+defns
+Split :: '' ::=
+
+  defn
+  split A B C :: :: spli :: SpI_
+  {{ com Splittable Types }}
+  % {{ tex [[B]] \mathbin{\lhd} [[A]] \mathbin{\rhd} [[C]] }}
+  {{ tex [[A]] \approxeq [[B]][[/\]][[C]] }}
+  by
+
+    ----------------:: and
+    split A/\B A B
+
+
+    split B C D
+    -------------------------- :: arrow
+    split A->B A->C A->D
+
+
+    ordinaryI D
+    splitU A B C
+    -------------------------- :: arrowUnion
+    split A->D B->D C->D
+
+
+    split A A1 A2
+    -------------------------- :: orl
+    split A\/B A1\/B A2\/B
+
+
+    ordinary A
+    split B B1 B2
+    -------------------------- :: orr
+    split A\/B A\/B1 A\/B2
+
+
+  defn
+  splitU A B C :: :: splu :: SpU_
+  {{ com Split Union Types }}
+  % {{ tex [[B]] \mathbin{\LHD} [[A]] \mathbin{\RHD} [[C]] }}
+  {{ tex [[A]] \approxeq [[B]][[\/]][[C]] }}
+  by
+
+
+    --------------------:: or
+    splitU A\/B A B
+
+
+    splitU A A1 A2
+    -------------------------- :: andl
+    splitU A/\B A1/\B A2/\B
+
+
+    ordinaryU A
+    splitU B B1 B2
+    -------------------------- :: andr
+    splitU A/\B A/\B1 A/\B2
+
+
+defns
+ASubtyping :: '' ::=
+
+  defn
+  PG |- A < B ::  :: asubtyping :: as_
+  {{ com Algorithmic Subtyping }}
+  {{ tex [[PG]] [[|-]] [[A]] [[<:]] [[B]] }}
+
+  by
+
+    okp PG
+    wft PG A
+    -------------------- :: refl
+    PG |- A < A
+
+    okp (PG, P2 <~ A)
+    P1 <> P2
+    PG |- P1 < P3
+    ---------------------------- :: primNeq
+    PG, P2 <~ A |- P1 < P3
+
+    okp (PG, P1 <~ P2)
+    PG |- P2 < P3
+    ---------------------------- :: primEq
+    PG, P1 <~ P2 |- P1 < P3
+
+    okp PG
+    wft PG A
+    -------------------- :: top
+    PG |- A < Top
+
+    okp PG
+    wft PG A
+    -------------------- :: bot
+    PG |- Bot < A
+
+    PG |- B1 < A1
+    PG |- A2 < B2
+    ------------------------------ :: arrow
+    PG |- A1 -> A2 < B1 -> B2
+
+    split A A1 A2
+    PG |- B < A1
+    PG |- B < A2
+    -------------------------     :: anda
+    PG |- B < A
+
+    split A A1 A2
+    PG |- A1 < B
+    -------------------------     :: andb
+    PG |- A < B
+
+    split A A1 A2
+    PG |- A2 < B
+    -------------------------     :: andc
+    PG |- A < B
+
+    splitU A A1 A2
+    PG |- A1 < B
+    PG |- A2 < B
+    ------------------------------ :: ora
+    PG |- A < B
+
+    splitU A A1 A2
+    PG |- B < A1
+    ---------------------------- :: orb
+    PG |- B < A
+
+    splitU A A1 A2
+    PG |- B < A2
+    ---------------------------- :: orc
+    PG |- B < A
+
+
+
+defns
+PSubtyping :: '' ::=
+
+  defn
+  PG |- A <: B ::  :: psubtyping :: ps_
+  {{ com Subtyping with Nominal Types }}
+  %{{ tex [[PG]] [[|-]] [[A]] <: [[B]] }}
+
+  by
+
+    -------------------- :: top
+    PG |- A <: Top
+
+    -------------------- :: int
+    PG |- Int <: Int
+
+    -------------------- :: null
+    PG |- Null <: Null
+
+    PG |- B1 <: A1
+    PG |- A2 <: B2
+    -------------------------     :: arrow
+    PG |- A1 -> A2 <: B1 -> B2
+
+    PG |- A <: C
+    PG |- B <: C
+    -------------------------     :: ora
+    PG |- A \/ B <: C
+
+    PG |- A <: B
+    -------------------------     :: orb
+    PG |- A <: B \/ C
+
+    PG |- A <: C
+    -------------------------     :: orc
+    PG |- A <: B \/ C
+
+    PG |- A <: B
+    PG |- A <: C
+    -------------------------     :: anda
+    PG |- A <: B /\ C
+
+    PG |- A <: C
+    -------------------------     :: andb
+    PG |- A /\ B <: C
+
+    PG |- B <: C
+    -------------------------     :: andc
+    PG |- A /\ B <: C
+
+    findsubtypesempty A
+    -------------------------      :: los
+    PG |- A <: B
+
+    okp PG
+    wft PG P
+    --------------------------    :: p_refl
+    PG |- P <: P
+
+    okp PG
+    wft PG P1
+    P2 in subtypes PG P1
+    --------------------------  :: p_in
+    PG |- P2 <: P1
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% subtyping with polymorphism
+
+defns
+PolySubtyping :: '' ::=
+
+  defn
+  PG ; G |- A <: B ::  :: polysubtyping :: polys_
+  {{ com Subtyping with Polymorphism }}
+  {{ tex [[PG]] ; [[G]] [[|-]] [[A]] <: [[B]] }}
+
+  by
+
+    -------------------- :: top
+    PG ; G |- A <: Top
+
+    -------------------- :: int
+    PG ; G |- Int <: Int
+
+    -------------------------      :: bot
+    PG ; G |-  Bot <: A
+
+    -------------------- :: unit
+    PG ; G |- Null <: Null
+
+    PG ; G |- B1 <: A1
+    PG ; G |- A2 <: B2
+    -------------------------     :: arrow
+    PG ; G |- A1 -> A2 <: B1 -> B2
+
+    PG ; G |- A <: C
+    PG ; G |- B <: C
+    -------------------------     :: ora
+    PG ; G |- A \/ B <: C
+
+    PG ; G |- A <: B
+    -------------------------     :: orb
+    PG ; G |- A <: B \/ C
+
+    PG ; G |- A <: C
+    -------------------------     :: orc
+    PG ; G |- A <: B \/ C
+
+    PG ; G |- A <: B
+    PG ; G |- A <: C
+    -------------------------     :: anda
+    PG ; G |- A <: B /\ C
+
+    PG ; G |- A <: C
+    -------------------------     :: andb
+    PG ; G |- A /\ B <: C
+
+    PG ; G |- B <: C
+    -------------------------     :: andc
+    PG ; G |- A /\ B <: C
+
+    okp PG
+    PG ; G |- a
+    -------------------------    :: tvar
+    PG ; G |- a <: a
+
+    PG ; G |- GT1 <: GT2
+    PG ; G , a * GT2 |- B1 <: B2
+    ---------------------------------    :: all
+    PG ; G |- \ GT1 . B1 <: \ GT2 . B2
+
+    okp PG
+    PG ; G |- P
+    --------------------------    :: prefl
+    PG ; G |- P <: P
+
+    okp PG
+    PG ; G |- P1
+    P2 in subtypes PG P1
+    --------------------------  :: pin
+    PG ; G |- P2 <: P1
+
+    PG ; G |- A1 <: A2
+    PG ; G , a * A2 |- B1 <: B2
+    ---------------------------------    :: alldisj
+    PG ; G |- \ A1 . B1 <: \ A2 . B2
+
+
+defns
+STyping :: '' ::=
+
+  defn
+  G |- e : A ::   :: typing :: 'typ_'
+  {{ com Typing Rules }}
+  by
+
+    % inference mode
+
+    uniq G
+    ----------------- :: int
+    G |- i : Int
+
+    uniq G
+    ----------------- :: null
+    G |- null : Null
+
+    % uniq G
+    x : A in G
+    -------------- :: var
+    G |- x : A
+
+
+    G |- e : A
+    ------------------- :: ann
+    G |- (e : A) : A
+
+
+    G |- e1 : A -> B
+    G |- e2 : A
+    -------------------- :: app
+    G |- e1 e2 : B
+
+
+    G |- (\x.e:A->B) : A -> B
+    G |- e2 : A
+    ------------------------------- :: appabs
+    G |- (\x.e:A->B) e2 : B
+
+
+    G |- e1 : A -> B
+    G |- e2 : A
+    -------------------- :: appm
+    G |- (e1:A->B) e2 : B
+
+
+    % checking mode
+
+    G |- e : A
+    A <: B
+    -------------- :: sub
+    G |- e : B
+
+    G, x:A |- e : B
+    -------------------------- :: abs
+    G |- \x. e : A -> B
+
+
+    G, x:A |- e : B
+    -------------------------- :: absann
+    G |- (\x.e:A->B) : A -> B
+
+
+    G |- e : A
+    G |- e : B
+    -------------------- :: and
+    G |- e : A /\ B
+
+
+    G |- e : A /\ B
+    -------------------- :: andl
+    G |- e : A
+
+
+    G |- e : A /\ B
+    -------------------- :: andr
+    G |- e : B
+
+
+    G |- e : A \/ B
+    G, x : A |- e1 : C
+    G, y : B |- e2 : C
+    A *s B
+    --------------------------------- :: switch
+    G |- switch e A e1 B e2 : C
+
+
+%    okp PG
+    wft PG P
+    -------------------------- :: prim
+    G |- new P : P
+
+
+    G |- e : A \/ B
+    G, x : A |- e1 : C
+    G, y : B |- e2 : C
+    --------------------------------- :: switcha
+    G |- switch e A e1 B e2 : C
+
+
+    G |- e1 : A
+    G |- e2 : B
+    ------------------------ :: merga
+    G |- e1,,e2 : A /\ B
+
+
+    G |- e1 : A
+    G |- e2 : B
+    A *s B
+    ------------------------ :: mergb
+    G |- e1,,e2 : A /\ B
+
+
+    G |- e : A
+    ----------------------------------- :: fix
+    G |- (fix x . e . A) : A
+
+
+defns
+PTyping :: '' ::=
+
+  defn
+  PG ; G |- e : A ::   :: ptyping :: 'ptyp_'
+  {{ com Nominal Typing Rules }}
+  {{ tex [[PG]] ; [[G]] [[|-]] [[e]] : [[A]] }}
+
+  by
+
+    % inference mode
+
+    uniq G
+    okp PG
+    ----------------- :: int
+    PG; G |- i : Int
+
+    uniq G
+    okp PG
+    ----------------- :: null
+    PG; G |- null : Null
+
+    uniq G
+    okp PG
+    wft PG A
+    x : A in G
+    -------------- :: var
+    PG; G |- x : A
+
+    okp PG
+    wft PG A
+    wft PG B
+    PG; G |- e1 : A -> B
+    PG; G |- e2 : A
+    -------------------- :: app
+    PG; G |- e1 e2 : B
+
+    % checking mode
+
+    PG; G |- e : A
+    A <: B
+    -------------- :: sub
+    PG; G |- e : B
+
+    okp PG
+    wft PG A
+    wft PG B
+    PG; G, x:A |- e : B
+    -------------------------- :: abs
+    PG; G |- \x. e : A -> B
+
+
+    PG; G |- e : A
+    PG; G |- e : B
+    -------------------- :: and
+    PG; G |- e : A /\ B
+
+
+    PG; G |- e : A \/ B
+    PG; G, x : A |- e1 : C
+    PG; G, y : B |- e2 : C
+    PG |- A *s B
+    --------------------------------- :: switch
+    PG; G |- switch e A e1 B e2 : C
+
+
+    okp PG
+    wft PG P
+    -------------------------- :: prim
+    PG; G |- new P : P
+
+
+    PG; G |- e : \ GT . C
+    PG ; G |- GT1 * GT
+    ---------------------------         :: tap
+    PG; G |- e GT1 : C [a :=  GT1]
+
+
+    PG; G, a * GT |- e : B
+    -------------------------          :: tabs
+    PG; G |- \ GT . e : \ GT . B
+
+
+    PG; G |- e : \ A . C
+    PG ; G |- B * A
+    ---------------------------         :: tapdisj
+    PG; G |- e B : C [a :=  B]
+
+
+    PG; G, a * A |- e : B
+    -------------------------          :: tabsdisj
+    PG; G |- \ A . e : \ A . B
+
+
+
+defns
+DunTyping :: '' ::=
+
+  defn
+  G |-d e : A ~> e' ::   :: duntyping :: 'dtyp_'
+  {{ com Dunfield Typing Rules }}
+  {{ tex [[G]] [[|-]]_{d} [[e]] : [[A]] [[~>]] \mathcolorbox{lightgray}{[[e']]} }}
+  by
+
+
+    uniq G
+    ----------------- :: int
+    G |-d i : Int ~> i
+
+    uniq G
+    ------------------------- :: null
+    G |-d null : Null ~> null
+
+    % uniq G
+    x : A in G
+    -------------- :: var
+    G |-d x : A ~> x
+
+    G |-d e1 : A -> B ~> e1'
+    G |-d e2 : A ~> e2'
+    ---------------------------------- :: app
+    G |-d e1 e2 : B ~> e1' e2'
+
+    G |-d e : A ~> e'
+    A <: B
+    ------------------- :: sub
+    G |-d e : B ~> e'
+
+    G, x:A |-d e : B ~> e'
+    ----------------------------------- :: abs
+    G |-d \x. e : A -> B ~> \x.e':A->B
+
+
+    G |-d e : A ~> e1
+    G |-d e : B ~> e2
+    -------------------------------- :: and
+    G |-d e : A /\ B ~> e1,,e2
+
+
+    G |-d e : A /\ B ~> e'
+    ------------------------ :: andl
+    G |-d e : A ~> e'
+
+
+    G |-d e : A /\ B ~> e'
+    ----------------------- :: andr
+    G |-d e : B ~> e'
+
+
+    G |-d e1 : A ~> e1'
+    ----------------------------------- :: merga
+    G |-d e1,,e2 : A ~> e1'
+
+
+    G |-d e2 : B ~> e2'
+    ----------------------------------- :: mergb
+    G |-d e1,,e2 : B ~> e2'
+
+
+    G |-d e : A ~> e'
+    -------------------- :: orl
+    G |-d e : A \/ B ~> e'
+
+
+    G |-d e : B ~> e'
+    -------------------- :: orr
+    G |-d e : A \/ B ~> e'
+
+
+    G |-d e : A ~> e'
+    --------------------------------------- :: fix
+    G |-d fix x . e : A ~> fix x . e' . A
+
+
+    G |-d e : A \/ B ~> e'
+    G, x : A |-d E[x] : C ~> e1
+    G, y : B |-d E[y] : C ~> e2
+    ---------------------------------------- :: switch
+    G |-d E[e'] : C ~> switch e' A e1 B e2
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Dispatch relation
+
+defns
+AppDispatch :: '' ::=
+
+  defn
+  e -->d e' ::   :: appd :: 'apd_'
+  {{ com Applicative dispatch }}
+  {{ tex [[e]] \longrightarrow_d [[e']] }}
+
+  by
+
+    dyntype v <: inptype v1
+    not dyntype v <: inptype v2
+    ----------------------- :: mleft
+    (v1,,v2) v -->d v1 v
+
+
+    not dyntype v <: inptype v1
+    dyntype v <: inptype v2
+    ----------------------- :: mright
+    (v1,,v2) v -->d v2 v
+
+
+    dyntype v <: inptype v1
+    dyntype v <: inptype v2
+    ----------------------------- :: both
+    (v1,,v2) v -->d v1 v ,, v2 v
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Reduction
+
+defns
+Reduction :: '' ::=
+
+  defn
+  e --> e' ::   :: step :: 'step_'
+  {{ com Small-step operational semantics }}
+  % {{ tex [[e]] \longrightarrow [[e']] }}
+  by
+
+
+    e1 --> e1'
+    ---------------- :: appl
+    e1 e2 --> e1' e2
+
+
+    e --> e'
+    ---------------- :: appr
+    v e --> v e'
+
+    ------------------------------ :: beta
+    (\x.e) v --> e [x ~> v]
+
+
+    e --> e'
+    ------------------------------------------------- :: switch
+    switch e A e1 B e2 --> switch e' A e1 B e2
+
+
+    dyntype v <: A
+    ------------------------------------------------- :: switchl
+    switch v A e1 B e2 --> e1 [x ~> v]
+
+
+    dyntype v <: B
+    ------------------------------------------------- :: switchr
+    switch v A e1 B e2 --> e2 [y ~> v]
+
+
+    okp PG
+    wft PG A
+    PG |- dyntype v <: A
+    ------------------------------------------------- :: switchpl
+    switch v A e1 B e2 --> e1 [x ~> v]
+
+
+    okp PG
+    wft PG B
+    PG |- dyntype v <: B
+    ------------------------------------------------- :: switchpr
+    switch v A e1 B e2 --> e2 [y ~> v]
+
+
+    %% DuoTyping construct
+
+    ---------------------------------------------------------------- :: dbeta
+    (\x : A . e) v --> e [x ~> v]
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Ambigous Reduction
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    --------------------------------- :: arrow
+    (\x.e):A->B --> (\x.e):A->B:A->B
+
+    -------------------------------------------- :: apparrow
+    (\x.e:A1->B1) v --> (\x.e:A1->B1:A1->B1) v
+
+
+    ----------------------------------------------------- :: apppexpr
+    (\x.e:A1->B1:A2->B2) p --> (\x.e:A1->B1:A2->B2) (p:A)
+
+
+    v -->A v'
+%    p1' --> A2 p2'
+%    p2' --> A1 p3'
+    ----------------------------------------- :: abeta
+    (\x.e:A->B) v --> (e [x ~> v']) : B
+
+
+    (v1,,v2) v -->d e'
+    -------------------------------- :: dispatch
+    (v1,,v2) v --> e'
+
+
+    v1,,v2 -->A->B v'
+    ----------------------------------------- :: betam
+    ((p1,,p2):A->B) v --> (v') v
+
+
+    e1 --> e1'
+    --------------------- :: mergl
+    e1,,e2 --> e1',,e2
+
+
+    e --> e'
+    --------------------- :: mergr
+    v,,e --> v,,e'
+
+
+    p1 -->A p1'
+    p2 -->B p2'
+    ---------------------------- :: mergann
+    p1:A,,p2:B --> p1',,p2':A/\B
+
+
+    ---------------------------- :: merga
+    p1,,p2 --> p1,,p2:A/\B
+
+
+    A = dyntype p1
+    ---------------------------- :: mergb
+    p1,,p2:B --> p1:A,,p2:B
+
+
+    B = dyntype p2
+    ---------------------------- :: mergc
+    p1:A,,p2 --> p1:A,,p2:B
+
+
+    e --> e'
+    ----------------------- :: ann
+    e : A --> e' : A
+
+
+    v --> A v'
+%    p1 --> B p2
+    ---------------------- :: annv
+    v:A --> v'
+
+
+    ----------------------------------------- :: switchval
+    switch p:A A e1 B e2 --> switch p A e1 B e2
+
+    v -->A v'
+    ----------------------------------------- :: switchlm
+    switch v A e1 B e2 --> e1 [x ~> v']
+
+
+    v -->B v'
+    ----------------------------------------- :: switchrm
+    switch v A e1 B e2 --> e2 [y ~> v']
+
+
+    --------------------------------------------- :: fix
+    fix x . e . A --> e [x ~> fix x . e . A]
+
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Reduction with polymorphism
+
+    defn
+    PG ; G |- e --> e' ::   :: polystep :: 'polystep_'
+    {{ com Small-step operational semantics }}
+    {{ tex [[PG]] ; [[G]] [[|-]] [[e]] \longrightarrow [[e']] }}
+    by
+
+
+      PG ; G |- e1 --> e1'
+      -------------------- :: appl
+      PG ; G |- e1 e2 --> e1' e2
+
+
+      PG ; G |- e --> e'
+      ---------------- :: appr
+      PG ; G |- v e --> v e'
+
+      ---------------------------------------------------------------- :: beta
+      PG ; G |- (\x.e) v --> e [x ~> v]
+
+      PG ; G |- e --> e'
+      ----------------------------- :: tappl
+      PG ; G |- e B --> e' B
+
+      ------------------------------------ :: tapp
+      PG ; G |- (\ GT . e) B --> e [a ~> B]
+
+      PG ; G |- e --> e'
+      ------------------------------------------------- :: switch
+      PG ; G |- switch e A e1 B e2 --> switch e' A e1 B e2
+
+
+      value v
+      PG ; G |- dyntype v <: A
+      ------------------------------------------------- :: switchl
+      PG ; G |- switch v A e1 B e2 --> e1 [x ~> v]
+
+
+      value v
+      PG ; G |- dyntype v <: B
+      ------------------------------------------------- :: switchr
+      PG ; G |- switch v A e1 B e2 --> e2 [y ~> v]
+
+
+      ------------------------------------ :: tappdisj
+      PG ; G |- (\ A . e) B --> e [a ~> B]
+
+
+defns
+NReduction :: '' ::=
+
+  defn
+  PG |- e --> e' ::   :: nstep :: 'nstep_'
+  {{ com Small-step operational semantics with Nominal Types}}
+  {{ tex \Delta [[|-]] [[e]] \longrightarrow [[e']] }}
+  by
+
+
+    PG |- e1 --> e1'
+    ---------------- :: appl
+    PG |- e1 e2 --> e1' e2
+
+
+    PG |- e --> e'
+    ---------------- :: appr
+    PG |- v e --> v e'
+
+    ---------------------------------------------------------------- :: beta
+    PG |- (\x.e) v --> e [x ~> v]
+
+
+    PG |- e --> e'
+    ------------------------------------------------- :: switch
+    PG |- switch e A e1 B e2 --> switch e' A e1 B e2
+
+
+%    okp PG
+%    wft PG A
+    PG |- dyntype v <: A
+    ------------------------------------------------- :: switchl
+    PG |- switch v A e1 B e2 --> e1 [x ~> v]
+
+
+%    okp PG
+%    wft PG B
+    PG |- dyntype v <: B
+    ------------------------------------------------- :: switchr
+    PG |- switch v A e1 B e2 --> e2 [y ~> v]
+
+
+    %% Bidirectional system
+
+    defns
+BTyping :: '' ::=
+
+  defn
+  G |- e dirflag A ::   :: btyping :: 'btyp_'
+  {{ com Typing Rules }}
+  by
+
+    % inference mode
+
+    uniq G
+    ----------------- :: int
+    G |- i => Int
+
+    uniq G
+    ----------------- :: null
+    G |- null => Null
+
+    uniq G
+    x : A in G
+    -------------- :: var
+    G |- x => A
+
+    G |- e <= A
+    ------------------ :: ann
+    G |- e : A => A
+
+    G |- e1 => A -> B
+    G |- e2 <= A
+    -------------------- :: app
+    G |- e1 e2 => B
+
+    % checking mode
+
+    G |- e => B
+    B <: A
+    -------------- :: sub
+    G |- e <= A
+
+    G, x:A |- e <= B
+    -------------------------- :: abs
+    G |- \x. e <= A -> B
+
+    G |- e <= A \/ B
+    G, x : A |- e1 <= C
+    G, y : B |- e2 <= C
+    A *s B
+    --------------------------------- :: switch
+    G |- switch e A e1 B e2 <= C
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% Switches and Merges
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+Casting :: '' ::=
+
+  defn
+  v --> A v' ::   :: cast :: 'cst_'
+  {{ com Casting }}
+  {{ tex [[v]] \longrightarrow_{[[A]]} [[v']] }}
+  by
+
+
+    ------------------------ :: int
+      i --> Int i
+
+
+    A1->B1 <: A2->B2
+    ------------------------------------------------ :: arrow
+    \x.e:A1->B1 --> A2->B2 \x.e:A1->B1
+
+
+    ------------------- :: top
+    v --> Top etop
+
+
+    ordinary A
+    v1 --> A v1'
+    ------------------ :: mergl
+    v1,,v2 --> A v1'
+
+
+    ordinary A
+    v2 --> A v2'
+    ------------------ :: mergr
+    v1,,v2 --> A v2'
+
+
+    v --> A v1
+    v --> B v2
+    ---------------------- :: merg
+    v --> A /\ B v1 ,, v2
+
+
+    v --> A v'
+    -------------------- :: orl
+    v --> A\/B v'
+
+
+    v --> B v'
+    -------------------- :: orr
+    v --> A\/B v'
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% COST
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+Cost :: '' ::=
+
+  defn
+  cost A B ::  :: cost :: 'cost_'
+  {{ tex [[A]] \sqcap [[B]] }}
+  {{ com Common Ordinary Subtypes }}
+
+  by
+
+      -------------------- :: top
+      cost Top Top
+
+      ordinary A
+      -------------------- :: ordl
+      cost A Top
+
+      ordinary A
+      -------------------- :: ordr
+      cost Top A
+
+      -------------------- :: int
+      cost Int Int
+
+      -------------------- :: null
+      cost Null Null
+
+      ---------------------------- :: arrow
+      cost A1 -> B1  A2 -> B2
+
+      A1 <=u A u=> A2
+      cost A1 B
+      -------------------- :: orla
+      cost A B
+
+      A1 <=u A u=> A2
+      cost A2 B
+      -------------------- :: orlb
+      cost A B
+
+      B1 <=u B u=> B2
+      cost A B1
+      -------------------- :: orra
+      cost A B
+
+      B1 <=u B u=> B2
+      cost A B2
+      -------------------- :: orrb
+      cost A B
+
+      UO B
+      cost A1 B
+      cost A2 B
+      cost A1 A2
+      -------------------- :: andl
+      cost (A1/\A2) B
+
+      UO A
+      cost A B1
+      cost A B2
+      cost B1 B2
+      -------------------- :: andr
+      cost A (B1/\B2)
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%% DuoTyping Relations %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% WELL FORMEDNESS OF Duotyped CONTEXT
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+wfc :: '' ::=
+
+  defn
+
+    G |- ok ::  :: wfc :: 'wf_'
+    {{ tex [[G]] [[|-]] ok }}
+
+    by
+
+    ----------------------- :: empty
+    [] |- ok
+     
+
+    G |- ok
+    x in G
+    ----------------- :: var
+    G, x : A |- ok
+
+
+    G |- ok
+    a in G
+    ----------------- :: tvar
+    G, a mode A |- ok
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Polymorphic Subtyping
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+PolyDuoSubtyping :: '' ::=
+
+  defn
+  G |- A <: B ::  :: polyduosubtyping :: s_
+  {{ com Subtyping }}
+  % {{ tex [[A]] <: [[B]] }}
+
+  by
+
+      a msup A in G
+      --------------- :: ReflTvar
+      G |- a <: a
+
+
+      a msub A in G
+      G |- A <: B
+      ---------------- :: TVara
+      G |- a <: B
+
+
+      a msup A in G
+      G |- B <: A 
+      ---------------- :: TVarb
+      G |- B <: a
+
+
+      G , a msub A |- B <: C
+      ---------------------------------------------- :: forallkfs
+      G |- ( kfs a msub A B ) <: ( kfs a msub A C )
+
+
+      G , a msup A |- B msub C
+      ------------------------------------------------ :: forallkfsb
+      G |- ( kfs a msup A B ) <: ( kfs a msup A C )
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Declerative Duotyping
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+defns
+DDuotyping :: '' ::=
+
+  defn
+
+      A mode B ::  :: dduotyping :: 'gds_' 
+
+      by
+
+      -------------------- :: topbot
+      A duo selBound
+
+
+      -------------------- :: int
+      Int duo Int
+
+      A1 fduo A2 
+      B1 duo B2
+      -------------------------     :: arrow
+      A1 -> B1 duo A2 -> B2
+
+
+      A duo C
+      ------------------------------    :: lleft
+      ( chooseType A B ) duo C
+
+
+      B duo C
+      -------------------------        :: rright
+      ( chooseType A B ) duo C
+
+
+      A duo B
+      A duo C 
+      -----------------------------     :: both
+      A duo ( chooseType B C )
+
+
+      B fduo A
+      ---------------------------    :: dual
+      A duo B
+
+
+      ------------ :: ReflTvarp
+      a duo a
+
+
+      A mode B
+      -------------------------------------- :: forallfsp
+      ( fs a A ) mode ( fs a B )
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Declerative Duotyping with Paramatric Polymorphism
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+DDuotypingPoly :: '' ::=
+
+  defn
+
+      G |- A mode B ::  :: dduotypingpoly :: 'gds_' by
+
+
+      G |- ok
+      a mode1 A in G
+      ------------------ :: ReflTvar
+      G |- a mode2 a
+
+
+      a mode1 A in G
+      ------------------- ::    ReflTvara
+      G |- a mode2 a
+
+
+      a mode A in G
+      G |- A mode B
+      ----------------- :: TVar
+      G |- a mode B
+
+
+      G , a |- A mode B
+      -------------------------------------- :: forallfs
+      G |- ( fs a A ) mode ( fs a B )
+
+
+      G , a mode1 A |- B mode2 C
+      ------------------------------------------------------ :: forallkfs
+      G |- ( kfs a mode1 A B ) mode2 ( kfs a mode1 A C )
+
+
+      G |- A smode B
+      G , a mode1 ( selPolyBound A B ) |- A1 mode2 B1
+      --------------------------------------------------------- ::        forallffs
+      G |- ( kfs a mode1 A A1 ) mode2 ( kfs a mode1 B B1 )
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Algorithamic Duotyping
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+gDuotyping :: '' ::=
+
+  defn
+  A mode B ::  :: duotyping :: 'gs_'
+  {{ com DuoTyping }}
+  % {{ tex [[A]] [[mode]] [[B]] }}
+
+  by
+
+    -------------------- :: topbtma
+    A mode selBound
+
+    -------------------- :: topbtmb
+    fselBound mode A
+
+    -------------------- :: int
+    Int duo Int
+
+    A1 fduo A2 
+    B1 duo B2
+    -------------------------     :: arrow
+    A1 -> B1 duo A2 -> B2
+
+    A duo C
+    -------------------------     :: lefta
+    ( chooseType A B ) duo C
+
+
+    A duo B
+    -------------------------     :: leftb
+    A duo ( fchooseType B C )
+
+
+    B duo C
+    -------------------------     :: righta
+    ( chooseType A B ) duo C
+
+
+    A duo C
+    -------------------------     :: rightb
+    A duo ( fchooseType B C )
+
+
+    A duo B
+    A duo C 
+    -----------------------------     :: botha
+    A duo ( chooseType B C )
+
+
+    A duo C
+    B duo C
+    -------------------------------     :: bothb
+    ( fchooseType A B ) duo C
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Algorithamic Duotyping with Paramatric Polymorphism
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+gDuotypingPoly :: '' ::=
+
+  defn
+
+      G |- A mode B ::  :: gduotypingpoly :: gs_ by
+
+
+      -------------------- :: topbtmap
+      G |- A mode selBound
+
+      -------------------- :: topbtmbp
+      G |- fselBound mode A
+
+      -------------------- :: intp
+      G |- Int duo Int
+
+      G |- A1 fduo A2 
+      G |- B1 duo B2
+      ---------------------------     :: arrowp
+      G |- A1 -> B1 duo A2 -> B2
+
+      G |- A duo C
+      -----------------------------     :: leftap
+      G |- ( chooseType A B ) duo C
+
+
+      G |- A duo B
+      -------------------------------     :: leftbp
+      G |- A duo ( fchooseType B C )
+
+
+      G |- B duo C
+      ------------------------------     :: rightap
+      G |- ( chooseType A B ) duo C
+
+
+      G |- A duo C
+      ------------------------------     :: rightbp
+      G |- A duo ( fchooseType B C )
+
+
+      G |- A duo B
+      G |- A duo C 
+      -----------------------------     :: bothap
+      G |- A duo ( chooseType B C )
+
+
+      G |- A duo C
+      G |- B duo C
+      -------------------------------     :: bothbp
+      G |- ( fchooseType A B ) duo C
+
+
+      G |- ok
+      a mode1 A in G
+      ------------------ :: ReflTvara
+      G |- a mode2 a
+
+
+      a mode1 A in G
+      ------------------ ::    ReflTvar
+      G |- a duo a
+
+
+      a mode A in G
+      G |- A mode B
+      ----------------- :: TVara
+      G |- a mode B
+
+
+      a mode A in G
+      G |- B fduo A
+      ------------------- :: TVarb
+      G |- B fduo a
+
+
+      G , a |- A mode B
+      -------------------------------------- :: forallfs
+      G |- ( fs a A ) mode ( fs a B )
+
+
+      G , a mode1 A |- B mode2 C
+      ----------------------------------------------------- :: forallkfs
+      G |- ( kfs a mode1 A B ) mode2 ( kfs a mode1 A C )
+
+
+      G |- A smode B
+      G , a mode1 ( selPolyBound A B ) |- A1 mode2 B1
+      ------------------------------------------------------- ::        forallffs
+      G |- ( kfs a mode1 A A1 ) mode2 ( kfs a mode1 B B1 )
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Traditional Supertyping
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+gSuperTypingT :: '' ::=
+
+  defn
+
+      A :> B ::  :: gsupertypingt :: 'sup_' by
+
+
+      -------------------- :: top
+      Top :> A
+
+
+      -------------------- :: bot
+      A :> Bot
+
+
+      -------------------- :: int
+      Int :> Int
+
+
+      B1 :> A1 
+      A2 :> B2
+      -------------------------     :: arrow
+      B1 -> B2 :> A1 -> A2
+
+
+      A :> C
+      B :> C
+      -------------------------     :: anda
+      A /\ B :> C
+
+
+      A :> B
+      -------------------------     :: andb
+      A :> B /\ C 
+
+
+      A :> C
+      -------------------------     :: andc
+      A :> B /\ C
+
+
+      A :> B
+      A :> C
+      -------------------------     :: ora
+      A :> B \/ C
+
+
+      A :> C
+      -------------------------     :: orb
+      A \/ B :> C 
+
+
+      B :> C
+      -------------------------     :: orc
+      A \/ B :> C 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Duotyped Typing
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+  defns
+
+      GTyping :: '' ::=
+
+      defn
+
+      G |- e : A ::  :: gtyping :: 'g_' by 
+
+      G |- ok
+      x : A in G
+      -------------- :: var
+      G |- x : A
+
+      G |- ok
+      ---------------- :: int
+      G |- i : Int
+
+      G , x : A1 |- e2 : A2
+      ------------------------------   :: abs
+      G |- \ x : A1 . e2 : A1 -> A2
+
+      G |- e1 : A1 -> A2
+      G |- e2 : A1
+      -------------------- :: app
+      G |- e1 e2 : A2
+
+      G |- e : B
+      B <: A
+      ---------------------- :: sub
+      G |- e : A
+
+
+      G |- e : B
+      G |- B msub A
+      ---------------------- :: subs
+      G |- e : A
+
+
+      G , a mode A |- e : B
+      ------------------------------------   :: tabs
+      G |- /\ a mode A . e : forall a A B
+
+
+      G |- e : forall a A B
+      G |- C mode A
+      ------------------------- :: tapp
+      G |- e C : B [ a := C ]
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Duotyped Reduction
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+
+GReduction :: '' ::=
+
+  defn
+
+      e1 --> e2 ::  :: greduction :: 'gred_' by 
+
+
+      ------------------------------------- :: AppAbs
+      (\x : A1 . e1) v2 --> e1 [ x ~> v2 ]
+
+
+      e1 --> e1'
+      ---------------- :: Fun
+      e1 e --> e1' e
+
+
+      e1 --> e1'
+      ---------------- :: Arg
+      v e1 --> v e1'
+
+
+      ------------------------------------- :: TAppTAbs
+      (/\ a mode A . e1) B --> e1 [ a ~> B ]
+
+
+      e1 --> e1'
+      ---------------- :: TFun
+      e1 A --> e1' A

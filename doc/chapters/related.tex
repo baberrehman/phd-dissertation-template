@@ -1,0 +1,625 @@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Related Work}
+\label{chap:related}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Related work for Disjoint Switches
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\begin{comment}
+\begin{itemize}
+	\item {Union Types    (discussing work on union types and elimination constructs for union types) <-- Need to coordinate with Ningning/Snow so that there’s not much overlap there. If the Overview discusses some of these in detail, the RW does not need to have much text in it.}
+	\item {Overloading (more general work on overloading, including type classes, approaches to overloading based on intersection types, etc…)}
+	\item{Disjointness and Disjoint Intersection Types}
+\end{itemize}
+\end{comment}
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%%%%% Union Types  %%%%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{Union Types}
+\begin{comment}
+Set-theoretic unions have sound theory and extensively studied in
+mathematics. Set-theoretic unions correspond to union types or
+disjoint union types in programming languages. Disjoint union types
+are also called sum types or variants.  Constructors are explicitly
+labeled in disjoint union types and expressions are manipulated using
+corresponding labels. Few other interesting calculi (and this paper)
+do not use labels and provide type-based union elimination.
+%Developing
+%a sound and deterministic union elimination construct for type-based
+%union elimination have been a challenge in research community.
+\end{comment}
+Union types were first introduced by \cite{macqueen1984ideal}.
+They proposed a typing rule that eliminates unions implicitly.
+The rule breaks type preservation under
+the conventional reduction strategy of the lambda calculus.
+\cite{barbanera1995intersection} solved the problem by reducing all
+copies of the same redex in parallel.
+\cite{dunfield2003type} and \cite{dunfield2014elaborating} took another approach to support
+mutable references. They restricted the elimination typing rule to only allow a single
+occurrence of a subterm with a union type when typing an expression.
+\cite{pierce1991programming} proposed a novel single-branch case construct
+for unions. As pointed by Dunfield and Pfenning, compared to the single
+occurrence approach, the
+only effect of Pierce's approach
+is to make elimination explicit.
+\begin{comment}
+Moreover, while \cite{dunfield2014elaborating} shows that
+subtyping is not necessary for elaboration, it is not obvious how to generalize
+elaboration to support subtyping relations such as
+\lstinline{Student <: Person} without using the subtyping rule. If the
+elaboration were generalized further to support such a subtyping relation, then
+a student with type \lstinline{Student | Person} can also be tagged
+non-deterministically.
+\end{comment}
+
+
+% \cite{barbanera1995intersection} proposed
+% two approaches for type preservation in a calculus with intersection and union
+% types.
+%However, their union elimination is same as last two and follow
+%unrestricted union elimination.
+
+\begin{comment}
+\cite{freeman1991refinement} studied union types along with intersection types
+in setting of refinement types for ML. Main focus of their work is to infer
+more precise types of expressions, which they call
+refinement types. Their work is targeted to contribute for the types
+in ML and not for the expressions. Therefore, they did not define
+expressions and dynamic semantics. On the contrary, our work provides
+a complete calculus with type sound dynamic semantics.
+\bruno{and ... Do they have an elimination construct for unions?
+  If so how is that related to our work?}.
+\baber{I added few more lines in Freeman citation.}
+\end{comment}
+Union types and elimination constructs based on types are
+widely used in the context of XML processing languages~\citep{hosoya2003xduce,benzaken2003cduce},
+and have inspired proposals for object oriented languages \citep{igarashi2006union}.
+Generally speaking, the elimination constructs in those
+languages offer a first-match semantics,
+where cases can overlap and reordering the cases may change the semantics of the program.
+This is in contrast to our approach.
+Union types have also been studied in the context of
+XDuce programming language \citep{hosoya2003xduce}. XDuce employs
+regular expression types. Pattern matching can be on
+expressions and types in XDuce.  Expressions are considered as special
+cases of types.  CDuce
+\citep{benzaken2003cduce} is an extension of XDuce.
+Work on the more foundational aspects
+of CDuce, and in particular on \emph{semantic subtyping}~\citep{frisch2002semantic}
+and set-theoretic types,
+also employs a form of first-match semantics elimination construct, though in a different form.
+In particular, work by ~\cite{castagna2005gentle} and \cite{castagna2017gradual}
+propose a conditional construct that can test whether a value matches a type.
+If it matches then the first branch is executed and the type for the value is refined.
+Otherwise, the second branch is executed and the type of the value is refined to be
+the negation of the type (expressing that the value does not have such type).
+% \baber{I am not sure if we should refer to following related work suggested by R4.
+% These papers are all about the design of algorithmic subtyping for OO languages
+% with semantic subtyping. Union types are natural to have in set-theoretic systems
+% such as semantic subtyping.}
+Union types are also studied in the context of
+semantic subtyping and object-oriented calculi
+\citep{ancona2016semantic,ancona2014sound,dardha2013semantic} which
+focus on designing subtyping algorithms to employ semantic subtyping in OOP.
+In contrast, we study a deterministic and type-safe
+switch construct for union elimination.
+%along with union types.
+
+\begin{comment}
+\cite{fallside2001xml} studied union
+types in markup language, but with a restriction of disjoint top-level
+labels which is different from our work on
+disjointness on types.\bruno{In other words, for the last work, the unions
+are labelled (i.e. the cases are not based on types)?}
+
+\cite{frisch2002semantic} studied union types and intersection types
+with semantic subtyping and provide the theoretical basis for CDuce programming language.
+However, their case expression (they call it \emph{match}) uses explicit
+tags to select a particular branch. Whereas, we propose dynamic type-based
+case construct.
+\cite{castagna2005gentle} extended this work with type-based case construct
+in the context of XDuce programming language. Main motivation of their
+work is to elaborate the significance of semantics subtyping.
+However, their underlying technique to select the branch in case construct
+relies on negation types. We, on the other hand, use disjointness
+and static type of the expression. \baber{they also use an extra variable.}
+%\cite{frisch2008semantic}.
+%\baber{more text.}
+\cite{castagna2017gradual} studied
+set-theoretic union types, intersection types and negation types
+in gradual typing setting. They also propose a dynamic type-based
+construct for set-theoretic union elimination which is closely
+related to our work.
+However, their underlying technique to select branches in case
+expression is different from ours.
+In particular, negation types play fundamental role in their
+typing construct for the case expressions.
+Whereas, our work relies on disjointness along with a notion of
+static types to to select a particular branch.
+They also do not provide dynamic semantics for their source language.
+Whereas, we provide a type sound dynamic semantics for \name.
+\baber{no variables in their case construct?}
+
+\baber{below text will be removed for Castagna's work.}
+\bruno{Castagna did alot of work
+  on union types before this one, so I'm not sure why we are mentioning only this work
+  of Castagna, instead of talking about previous work where the ideas were introduced.}
+\baber{Castagna's work includes CDuce, which is mentioned. I added semantic subtyping
+as well now. Should we add more Castagna's work? I think his above mentioned work
+is relevant to our work.}
+They give a dynamic type-based cast for union elimination. But they do not
+have disjointness constraint on case branches and they check the type
+only for first case branch\bruno{Not a very good explanation: you get negated types for the branches}.
+\end{comment}
+
+\cite{muehlboeck2018empowering} give a general framework for subtyping
+with intersection and union types. They illustrate the significance of
+their framework using the Ceylon programming language.
+The main objective of their work is to define a generic framework for
+deriving subtyping algorithms for
+intersection and union types in the presence of various distributive subtyping rules.
+For instance, their framework could be useful to derive an algorithmic
+formulation for the subtyping relation presented in Figure~\ref{fig:dist:dec:subtyping}.
+They also briefly cover disjointness in their work. As part of their framework, they
+can also check disjointness given some disjointness axioms. For instance,
+for \name, such axioms could be similar to \rref{ad-btmr} or \rref{ad-intl}
+in Figure~\ref{fig:union:disj-typ}.
+However, they do not have a formal
+specification of disjointness. Instead they assume that some sound specification
+exists and that the axioms respect such specification.
+If some unsound axioms are given to their framework (say $[[Int * Int]]$) this
+would lead to a problematic algorithm for checking disjointness.
+In our work we provide specifications for disjointness together
+with sound and complete algorithmic formulations.
+In addition, unlike us,
+they do not study the semantics of disjoint switch expressions.
+%although they mention some Ceylon examples using such expressions.
+
+\paragraph*{Occurrence Typing.}
+Occurrence typing or flow typing \citep{tobin2008design} specializes or refines
+the type of variable in a type test. An example of occurrence typing is:
+
+\begin{lstlisting}
+	Integer occurrence (Integer | String val) {
+	  if (val is Integer) { return val+1; }
+	  else                { return toInt(val)+2; }
+	}
+\end{lstlisting}
+
+\noindent In such code, \lstinline{val} initially has type \lstinline{$[[Int \/ String]]$}.
+The conditional checks if the \lstinline{val} is of type \lstinline{$[[Int]]$}.
+If the condition succeeds, it is safe to assume that \lstinline{val} is of type \lstinline{$[[Int]]$},
+and the type of \lstinline{val} is refined in the branch to be \lstinline{$[[Int]]$}.
+Otherwise, it is safe to assume that \lstinline{val} is of type \lstinline{$[[String]]$}, in the
+other branch (and the type is refined accordingly).
+The motivation to study occurrence typing was to introduce typing in dynamically
+typed languages.
+Occurrence typing was further studied by \cite{tobin2010logical},
+which resulted into the development of Typed Racket.
+Variants of occurrence typing are nowadays employed in mainstream languages
+such as TypeScript, Ceylon or Flow.
+% \cite{castagna2019revisiting} proposed a more general formulation of
+% occurrence typing.
+\cite{castagna2019revisiting} extended occurrence typing to refine the type of
+generic expressions, not just variables. They also studied the combination
+with gradual typing. Recently, \cite{castagna2022type} show that the
+classical union and intersection types along with a type-based
+switch construct encompasses occurrence typing.
+Occurrence typing in a conditional construct,
+such as the above, provides an alternative
+means to eliminate union types using a first-match semantics. That is the
+order of the type tests determines the priority.
+%that is given to the various types being tested.
+
+\paragraph*{Nullable Types.}
+% Generally speaking, \lstinline{Null} type
+% has only one value i.e \lstinline{null}. \lstinline{Null} type distinguishes itself from $[[Bot]]$
+% type in a sense that $[[Bot]]$ has no inhabitants at all while \lstinline{Null}
+% has onle one inhabitant i.e \lstinline{null}.
+% In that view, $[[Bot]]$ type is the empty
+% set while \lstinline{Null} type is a singleton set.
+% Value of \lstinline{Null} type can be used as
+% value of various other types such as \lstinline{String} in Scala (except Scala 3).
+Nullable types are types which may have the \lstinline{null} value.
+%Implicit nulls add tricky challenges and runtime errors in a program
+%if the care is not taken.
+Recently, \cite{nieto20nulls} proposed an
+approach with explicit nulls in Scala using union types. The Ceylon
+language has implemented a similar approach for a few years now.
+However our's and Ceylon's approaches are based on disjoint switches to test
+for nullability, while \cite{nieto20nulls}'s approach is based
+on a simplified form of occurrence typing.
+
+%While approach in ~\cite{nieto20nulls} detects \lstinline{null} value deference at
+%compile time by reifying subtyping hirearchy in Scala.
+
+Various approaches have been proposed to deal with nullability
+such as \lstinline{T?} in Kotlin~\citep{kotlin},
+Swift~\citep{swift} and Flow~\citep{chaudhuri2017fast}.
+The Checker Framework \citep{papi2008practical}
+is another line of related work to detect null pointer deferences in Java programs.
+\cite{banerjee2019nullaway} proposes an approach to explicitly associate
+nullable and non-nullable properties with expressions in Java.
+However, differently from our work,
+in those approaches nullable types are not encoded with union types.
+\cite{matchtypes2022} study a notion of match types for type level
+programming. They also employ a notion of disjointness in match types
+and can encode nullable types. However, they provide
+match types at the type level and do not use them for union elimination.
+Furthermore, they do not study intersection and union types formally.
+In contrast, we provide a term level switch construct for union elimination.
+
+%\baber{They have both term level and type level match construct.}
+
+%All these approaches diverge from our work. We formalize a type-safe
+%and deterministic switch construct based upon disjointness with union and
+%intersection types.
+%While these approaches deal with \lstinline{null} pointer deferences by
+%exploiting various techniques such as optional types, explicit tags or
+%program analysis.
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%% Disjoint Intersection Types  %%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{Disjoint Intersection Types}
+%\cite{pottinger1980type} and \cite{coppo1981functional} were the first to study
+%intersection types in the research
+%literature. Forsythe~\cite{reynolds1988preliminary} is the first
+%programming language to have intersection types, but it did not
+%have union types.
+Disjoint intersection types were first
+studied by \cite{oliveira2016disjoint} in the $\lambda_{i}$ calculus
+to give a coherent calculus for intersection types with a merge
+operator. The notion of disjointness used in \name, discussed in \Cref{sec:union},
+is inspired by the notion of disjointness of $\lambda_{i}$. In essence,
+disjointness in \name is the dual notion: while in $\lambda_{i}$ two types
+are disjoint if they only have \emph{top-like} supertypes, in \name two types
+are disjoint if they only have \emph{bottom-like} subtypes.
+\emph{Disjoint polymorphism}~\citep{alpuimdisjoint} has been studied for
+calculi with disjoint intersection types.
+
+None of calculi with disjoint intersection types
+\citep{oliveira2016disjoint,bi_et_al:LIPIcs:2018:9227,alpuimdisjoint,bi:fiplus} in the literature
+includes union types. One interesting discovery of our work is that the
+presence of both intersections and unions in a calculus can affect disjointness.
+In particular, as we have seen in Section~\ref{sec:inter}, adding intersection types
+required us to change disjointness. The notion of disjointness that was
+derived from $\lambda_{i}$ stops working in the presence of intersection types.
+Interestingly, a similar issue happens when union types are added to
+a calculus with disjoint intersection types. If disjointness of two types \lstinline{A}
+and \lstinline{B} is defined to be that such types can only have top-like types,
+then adding union types immediately breaks such definition.
+For example, the types \lstinline{$[[Int]]$} and \lstinline{$[[Bool]]$} are disjoint but, with union
+types, \lstinline{$[[Int \/ Bool]]$} is a common supertype that is not top-like.
+We conjecture that, to add union types to disjoint intersection types,
+we can use the following definition of disjointness:
+\vspace{-1mm}
+\begin{definition}
+\label{def:related:disj}
+  %A $*_s$ B $\Coloneqq$ $\forall$ $[[Cord]]$, $\neg$ \ ($[[A <: Cord]]$ and $[[B <: Cord]]$).
+  $[[A *s B]]$ $\Coloneqq$ $\nexists$ $[[Cord]]$, $[[A <: Cord]]$ and $[[B <: Cord]]$.
+\end{definition}
+\vspace{-1mm}
+\noindent which is, in essence, the dual notion of the definition presented in
+Section~\ref{sec:inter}. Under this definition \lstinline{$[[Int]]$} and \lstinline{$[[Bool]]$} would
+be disjoint since we cannot find a common ordinary supertype (and \lstinline{$[[Int \/ Bool]]$}
+is a supertype, but it is not ordinary). Furthermore, there should be a
+dual notion to LOS, capturing the greatest ordinary supertypes. Moreover,
+if a calculus includes both disjoint switches and a merge operator,
+then the two notions of disjointness must coexist in the calculus.
+This will be an interesting path of exploration for future work.
+
+
+\section{Overloading and Dynamic Dispatch}
+
+\paragraph*{Overloading.}
+Union and intersection types also provide a form of function overloading or ad-hoc
+polymorphism using the switch and type-based case analysis. A programmer
+may define the argument type to be a union type. By
+using type-based case analysis, it is possible to execute different code
+for each specific type of input.  Intersection types have also been
+studied for function overloading. For example, a function with type
+\lstinline{$[[Int -> Int /\ Bool -> Bool]]$} can take input values either of type
+\lstinline{$[[Int]]$} or \lstinline{$[[Bool]]$}.  In such case,
+it returns either \lstinline{$[[Int]]$} or \lstinline{$[[Bool]]$}
+depending upon the input type.  Function overloading
+\citep{castagna1995calculus, cardelli1985understanding, wadler1989make}
+has been studied in detail in the literature.
+%by \cite{castagna1995calculus},
+%\cite{cardelli1985understanding}, \cite{stuckey2005theory} among others.
+\cite{wadler1989make} studied type classes as an alternative way
+to provide overloading based on parametric polymorphism.
+Recently, \cite{rioux2023bowtie} studied function overloading with
+intersection types, merge operator, and the union types
+in a calculus called $F_{\bowtie}$.
+Their calculus is type-safe and deterministic.
+However, the merge operator in their calculus is restricted
+to functions. Moreover, the $F_{\bowtie}$ calculus
+is proposed after \cite{rehman_et_al:LIPIcs.ECOOP.2022.25}.
+
+
+\paragraph{Dynamic dispatch.}
+A straightforward definition of dynamic dispatch
+\citep{castagna1995calculus,bourdoncle1997type,castagna2014polymorphic,clifton2006multijava}
+is the \emph{runtime function overloading}.
+In contrast to the static overloading, a specific
+function implementation is selected based on the the dynamic or
+runtime type of the one (usually left) or more argument(s) in dynamic dispatch.
+This division categorizes the dynamic dispatch into single and multiple
+dispatch respectively. Single dispatch comes naturally with most of the
+OOP languages such as C++ \citep{stroustrup1986overview} and
+Smalltalk \citep{goldberg1983smalltalk}.
+Multiple dispatch
+\citep{castagna1995calculus,bourdoncle1997type,castagna2014polymorphic},
+on the other hand, requires special care.
+Normally, types overlap in multiple dispatch and
+the language implementation selects the best matching function
+implementation based on the argument type such as in
+Julia \citep{zappa2018julia}.
+Recently, \cite{park2019polymorphic} study symmetric dynamic dispatch with
+multiple inheritance, parametric polymorphism, and variance.
+% They proposed a type-sound calculus.
+% Their study consists of a static as well as the dynamic semantics.
+However, this line of work differs from ours in a way that we do not allow
+overlapping types in \name in the alternative branches of a switch expression.
+Thus \name provides a less expressive but deterministic variant of dynamic dispatch.
+% In particular, the types in two different implementations of a function
+% cannot overlap.
+
+
+%---------------------------------------------------------------------------%%
+
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%%% Duality in Logic  %%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{Duality in Logic and Programming Language Theory}
+
+Apart from informally observing duality of type system features, as far as we known,
+formally exploiting duality in subtyping relations has not been investigated in the past.
+However there is plenty of work on uses of duality in programming language theory.
+Furthermore there is related work on type
+systems that exploit various generalizations for added expressive
+power or economy in metatheory and implementation. We discuss these next.
+
+In type theory~\citep{Andrews86} and/or category theory~\citep{MacLane:cwm,BirddeMoor96:Algebra}
+duality occurs in various forms. For instance,
+the duality between sum and product types is well-known in both type and
+category theory. Properties about such types often explicitly acknowledge
+duality. Many properties about sum types are presented as 
+dual properties of corresponding properties on product types and vice-versa. Our Lemma \ref{lemma:ddboth-inv}
+is an example of a property that applies to both union and/or intersection types.
+In this property duality is not only acknowledged, but directly exploited in the lemma
+itself to provide a generalized property that can be specialized
+to one construct and its dual.
+Various other dualities between constructs are known and exploited in various
+ways in type and/or category theory.
+For example, existential and universal quantification can be captured by an
+encoding by one through the other. The type $\exists \alpha.~A$ can
+be encoded as $\forall \beta. (\forall \alpha.~A \to \beta) \to \beta$, which
+requires a kind of CPS translation~\citep{DaFi1992} of the corresponding terms. Similar
+encodings exist for sums and products.
+
+In the field of \emph{proof-theoretic semantics}~\citep{gentzen:untersuchungen}
+and in \emph{natural deduction}
+the concept of \emph{harmony} is used to describe introduction and
+elimination rules that are in some sense dual. For instance, the usual
+rules for introduction and elimination of conjunction are in perfect harmony.
+The inversion principles by \cite{Prawitz1979ProofsAT}
+are a general procedure to associate to any
+arbitrary collection of introduction rules a specific collection of
+elimination rules. The elimination rules are in harmony with the given collection of
+introduction rules. Prawitz inversion principles attempt to capture harmony
+in a more precise way, directly expressing it formally.
+Therefore inversion principles have similar considerations to \nameduo in terms
+of expressing some form of duality directly in a formalism. However
+inversion principles focus on introduction and/or elimination rules,
+while \nameduo is focused on subtyping. Nevertheless in future work we
+are interested in exploiting the use of duality in the typing relation more.
+We believe that the notion of harmony and inversion principles could be
+quite helpful in such work.
+
+\emph{Double-line rules}~\citep{dosen1989} are deduction rules that
+can be read both from top to bottom (as usual) and
+also from bottom to top. In other words they express
+two standard (dual) deduction rules in a single double-line rule.
+Like \nameduo, double-line rules aim at expressing a form of duality
+in a single rule. Unlike \nameduo, double-line rules are concerned
+with (dual) rules where the premises and conclusions of one rule
+become the conclusions and premises of the other rule, respectively.
+
+\cite{bernardi2014duality} explain duality relations in the
+context in \emph{session types}.  Binary session types have two
+endpoints connected through one communication channel.
+In session types, connected endpoints should have a
+dual relation in their session types. The duality relation in session
+types is related to types and may have various
+interpretations. In contrast \nameduo is about subtyping (or supertyping).
+
+The duality between data and codata is well-known in programming
+language theory~\citep{BirddeMoor96:Algebra}. Data types and codata types are duals in the sense
+that data types are defined in terms of constructors while codata
+types are defined in terms of destructors.  More recently, such
+duality has been exploited in language design
+\citep{ostermann2018dualizing,binder2019decomposition} to provide an
+automatic way to switch between programs defined on datatypes and equivalent
+programs defined on codata types. 
+The use of duality in this line of work is quite different from ours.
+
+
+%---------------------------------------------------%%
+
+%%%%%%%%%%%%%%%%%%% Generalizations  %%%%%%%%%%%%%%%%%
+
+%---------------------------------------------------%%
+
+
+\section{Generalizations in Type Systems and Type Theory}
+
+\emph{Pure type systems} (PTSs)
+\citep{van1993checking,mckinna1993pure,adams2006pure,jutting1993typing,severi1994pure,zwanenburg1999pure}
+capture a generalization of various type systems ($F,
+F^{\omega}, {\lambda}$P). Typing rules of multiple type systems are
+expressed in pure type systems via parameterization.
+PTSs are parameterized by three sets: a set of sorts; a set of axioms;
+and a set of rules. Concrete type systems (such as System $F$),
+are recovered with concrete instantiations of those sets.
+Pure type systems with subtyping
+\citep{zwanenburg1999pure} are a variant of pure type systems
+that captures a family of type systems with subtyping. This
+variant captures only the upper bounds. It does not provide subtyping
+generalization with both upper and the lower bounded quantification
+like our \nameduo generalizations of $F_{<:}$.
+Pure subtype systems \citep{hutchins2010pure}
+is a family of calculi based on subtyping only (and without a typing
+relation). This system eliminates the need of typing and presents an
+alternative to typing using subtyping only.
+Pure subtype systems support upper bounded quantification, but no lower
+bounded quantification.
+
+\paragraph{Modal Type Theory.}
+Modal type theory~\citep{nanevski2008contextual}
+is an extension of type theory which provides type
+rules using modalities. Modal type
+theory can represent a proposition as
+types which may be proved based upon the deduction rules in a given
+context. Modal type theory also employs modes, for instance \emph{possibility} and 
+\emph{necessity}~\citep{simpson1994proof, nanevski2008contextual}.
+There are many type systems that use modes to generalize
+typing relations. One can view \nameduo as a simple instance of a
+relation with a mode. In \nameduo the mode is either subtyping or
+supertyping.
+
+\paragraph{Bi-directional type checking.}
+Bi-directional type checking \citep{local,dunfield2019bidirectional}
+also employs a mode, but in the typing relation
+instead. Bi-directional type checking is a common technique, used in implementations
+of programming languages, that can eliminate redundant type
+annotations.  Bi-directional type-checking is also employed is
+several type systems, especially those where full type inference is
+undecidable~\citep{local,dunfield2013complete}.  In such cases only
+partial inference methods are feasible in practice, which means that
+some type annotations are necessary. Bi-directional type checking is
+useful in such cases, allowing the type information to be easily
+propagated without requiring further (redundant) annotations.  The
+modes in bi-directional type-checking are checking or synthesis.
+Checking checks a given term against a given type, whereas the
+synthesis infers the type based upon the available information in the
+context. 
+
+\paragraph{Unified Subtyping.}
+Unified subtyping \citep{yang2017unifying} is a technique that can be used
+in dependently typed systems supporting unified syntax to model typing
+and subtyping in a single relation. The single unified subtyping relation
+generalizes both typing and subtyping. Like \nameduo, unified subtyping
+can also help reducing language metatheory and duplication. However
+unified subtyping is orthogonal to \nameduo and does not exploit duality
+of features. We believe that both techniques can complement each other.
+
+\begin{comment}
+Lower-bounded quantification is not really new.  Igarashi and Viroli
+>   have pointed out correspondence between (use-site) variance and
+>   existential types and, in order to capture contravariance, they
+>   introduced lower-bounded existential types.
+> 
+>   Atsushi Igarashi, Mirko Viroli: On Variance-Based Subtyping for
+>   Parametric Types. ECOOP 2002: 441-469
+\end{comment}
+
+\paragraph{Bounded quantification and generalizations.}
+System $F_{<:}$ \citep{cardelli1994extension} 
+is extensively studied due to its feature of bounded
+quantification. F-bounded
+quantification \citep{canning1989f} is a generalization of bounded
+quantification to handle recursive types.
+Although we are not aware of an extension of $F_{<:}$ with lower
+bounded quantification, such notion has appeared before
+in some calculi. For instance, \cite{igarashi:2002:variance}
+have pointed out correspondence between use-site variance and
+existential types and, in order to capture contravariance, they
+introduced lower-bounded existential types.
+
+One generalization of $F_{<:}$ is studied by \cite{amin2017type}, which formalizes
+\emph{type bounds} in Scala.
+Type bounds is an interesting feature in Scala as elaborated by the following code (code extended from \cref{sec:overview:4}):
+
+\begin{lstlisting}[language=Scala]
+	class TypeBoundsCollection[S >: GraduateStudent <: Student](obj: S) {
+	  def student: S = obj
+	}
+\end{lstlisting}
+
+\noindent While in our variants of $F_{<:}$ we support either lower bounded
+quantification or upper bounded quantification (but not both at once), Scala's
+type bounds allow both upper and lower bounds at once. This is clearly more
+expressive than what we have, but it comes with its own problems.
+Formalisms with Scala-like type bounds often need to include a transitivity
+axiom (and thus are non-algorithmic) and they have to deal with the bad bounds
+problem. In contrast our simpler extension of type bounds is comparable
+in complexity to $F_{<:}$'s upper bounded quantification, and there is a set of
+algorithmic subtyping rules without a built-in transitivity axiom.
+
+% \paragraph{Intersection and Union Types}
+% Intersection and union types
+% \citep{barbanera1995intersection,dunfield2014elaborating,muehlboeck2018empowering,pierce2002programming}
+% are getting significant attention in recent years, and are used in
+% several modern programming languages (including Scala, Flow or
+% TypeScript). \cite{reynolds1988preliminary} was the first to
+% promote the use of intersection types in programming languages. Later
+% on, \cite{pierce2002programming} studied intersection types,
+% union types and polymorphism combined in a typed $[[\]]$-calculus.
+% Recently, \cite{muehlboeck2018empowering} presented a generalized
+% formulation of calculi with union and intersection types. They
+% demonstrated it with the help of Ceylon programming language \citep{king2013ceylon}.
+% %Refinement intersection types.
+% \cite{dunfield2014elaborating} presented an expressive calculus with a merge
+% operator and unrestricted intersection types with union types.
+% We exploit the duality of union and intersection types to illustrate \nameduo.
+% Our \nameduo calculi manages to capture the six common rules for unions and intersections
+% using three rules only (plus the duality rule), which provides a simple 
+% illustrative example of the use of duality.
+
+
+\paragraph*{Duality in Subtyping of Intersection and Union Types.}
+We exploit the duality of union and intersection 
+types to illustrate \nameduo.
+Our \nameduo calculi manages to capture the six common 
+rules for unions and intersections
+using three rules only (plus the duality rule), which provides a simple 
+illustrative example of the use of duality.
+None of the calculi with intersection and union types discussed so far
+study the duality of subtyping formally as we do.
+
+%---------------------------------------------------------------------------%%
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../Thesis"
+%%% org-ref-default-bibliography: "../Thesis.bib"
+%%% End:
